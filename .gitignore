@@ -1,0 +1,89 @@
+# Ceres project .gitignore
+
+# Backup artifacts and generated archives
+artifacts/
+artifacts/**
+
+# Local config with secrets
+config/.env
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.log
+*.tmp
+# Git ignore для проекта Ceres
+
+# 🔐 Секретные файлы
+config/.env
+config/.env.*.backup
+.env.local
+
+# 📦 Виртуальные окружения и зависимости
+venv/
+env/
+ENV/
+.venv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 🐳 Docker
+.dockerignore
+docker-compose.override.yml
+
+# 💾 Временные файлы
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 🔧 IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.editorconfig
+*.iml
+
+# 📁 Резервные копии
+backups/old/
+*.backup
+*.bak
+
+# 🔍 Git
+.gitignore.bak
+
+# 🧹 Misc
+node_modules/
+.npm
+dist/
+build/
+coverage/
+
+# ⚠️ НЕ ИГНОРИРУЙТЕ
+# config/docker-compose.yml - НУЖЕН!
+# config/.env.example - НУЖЕН!
+# scripts/ - НУЖНЫ!
+# docs/ - НУЖНА!

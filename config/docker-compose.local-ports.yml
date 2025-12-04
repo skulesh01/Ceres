@@ -1,0 +1,13 @@
+services:
+  keycloak:
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+  grafana:
+    ports:
+      - "3000:3000"
+  gitea:
+    ports:
+      - "3001:3000"
+networks: {}
+volumes: {}

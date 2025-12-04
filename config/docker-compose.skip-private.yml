@@ -1,0 +1,28 @@
+services:
+  mailcow:
+    profiles:
+      - skip
+
+  processmaker:
+    profiles:
+      - skip
+  meshcentral:
+    profiles:
+      - skip
+  suitecrm:
+    profiles:
+      - skip
+
+  freeipa:
+    profiles:
+      - skip
+  taiga-back:
+    profiles:
+      - skip
+
+  taiga-front:
+    profiles:
+      - skip
+
+# Use this override when some images are private/unavailable.
+# Start with: docker compose -f docker-compose.yml -f docker-compose.skip-private.yml up -d
