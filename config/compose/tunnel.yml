@@ -1,0 +1,31 @@
+# CERES Compose Module: tunnel
+# Purpose: external access WITHOUT opening inbound ports (Cloudflare Tunnel)
+#
+# How it works:
+# - Users access public HTTPS hostnames on Cloudflare.
+# - Cloudflare routes traffic to this tunnel over outbound-only connection.
+# - The tunnel forwards requests to the local edge reverse-proxy (Caddy).
+#
+# Requirements:
+# - Cloudflare Zero Trust account
+# - A domain managed by Cloudflare (recommended)
+# - A Tunnel token in config/.env (CLOUDFLARED_TOKEN)
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared@sha256:89ee50efb1e9cb2ae30281a8a404fed95eb8f02f0a972617526f8c5b417acae2
+    hostname: cloudflared
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${CLOUDFLARED_TOKEN:-}
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:

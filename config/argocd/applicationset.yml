@@ -1,0 +1,220 @@
+---
+# ArgoCD ApplicationSet for CERES Helm Charts
+# Automatically discovers and deploys tenants and services
+# Features: Multi-cluster support, dynamic tenant provisioning, auto-updates
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ceres-helm-apps
+  namespace: argocd
+spec:
+  # Generator 1: Git-based - discover applications from repo structure
+  generators:
+    - git:
+        repoURL: https://github.com/ceres-platform/ceres-helm-charts
+        revision: main
+        directories:
+          - path: 'helm/releases/*'
+        template:
+          spec:
+            source:
+              repoURL: https://github.com/ceres-platform/ceres-helm-charts
+              targetRevision: main
+              path: '{{path}}'
+              helm:
+                releaseName: '{{path.basename}}'
+                values: |
+                  global:
+                    domain: ceres.local
+                    imagePullPolicy: IfNotPresent
+                    environment: production
+  
+  # Generator 2: Cluster list for multi-cluster deployments
+  - clusters:
+      selector:
+        matchLabels:
+          argocd.argoproj.io/secret-type: cluster
+    template:
+      metadata:
+        name: '{{cluster.name}}-{{app.name}}'
+      spec:
+        destination:
+          server: '{{cluster.server}}'
+          namespace: ceres
+  
+  # Generator 3: Pull Request - review environment deployments
+  - pullRequest:
+        github:
+          appID: 1234567
+          appInstallationID: 12345678
+          privateKey: $github-private-key
+          org: ceres-platform
+          repo: ceres
+          reviewsRequired: 1
+    template:
+      metadata:
+        name: 'pr-{{number}}-ceres'
+      spec:
+        destination:
+          namespace: ceres-pr-{{number}}
+  
+  # Generator 4: List-based for specific tenant applications
+  - list:
+        elements:
+          - name: ceres-core
+            version: "2.8.0"
+            replicas: 3
+          - name: ceres-monitoring
+            version: "2.8.0"
+            replicas: 2
+          - name: ceres-vault
+            version: "2.8.0"
+            replicas: 1
+    template:
+      metadata:
+        name: '{{name}}'
+      spec:
+        destination:
+          namespace: ceres
+  
+  template:
+    metadata:
+      name: '{{name}}-{{cluster.name}}'
+      labels:
+        app: ceres
+        version: "2.8.0"
+    spec:
+      project: ceres-project
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: ceres
+      source:
+        repoURL: https://github.com/ceres-platform/ceres-helm-charts
+        targetRevision: main
+        path: helm/ceres
+        helm:
+          releaseName: ceres
+          values: |
+            replicaCount: 3
+            image:
+              repository: ceres-platform/ceres
+              tag: "2.8.0"
+              pullPolicy: IfNotPresent
+            resources:
+              requests:
+                cpu: "500m"
+                memory: "512Mi"
+              limits:
+                cpu: "1000m"
+                memory: "1Gi"
+          parameters:
+            - name: replicaCount
+              value: "{{replicaCount}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+---
+# ApplicationSet for tenant auto-provisioning
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ceres-tenants
+  namespace: argocd
+spec:
+  generators:
+    # Discover tenants from ConfigMap
+    - configMap:
+        keys:
+          - tenants
+        name: ceres-tenants-list
+        namespace: argocd
+    template:
+      metadata:
+        name: 'tenant-{{tenant-id}}'
+        labels:
+          tenant: '{{tenant-id}}'
+          app: ceres-tenant
+      spec:
+        project: ceres-project
+        destination:
+          server: https://kubernetes.default.svc
+          namespace: 'ceres-{{tenant-id}}'
+        source:
+          repoURL: https://github.com/ceres-platform/ceres-helm-charts
+          targetRevision: main
+          path: helm/ceres-tenant
+          helm:
+            releaseName: 'ceres-{{tenant-id}}'
+            values: |
+              tenantId: '{{tenant-id}}'
+              tenantName: '{{tenant-name}}'
+              namespace: 'ceres-{{tenant-id}}'
+              replicas: 2
+              database:
+                schema: 'tenant_{{tenant-id}}'
+              keycloak:
+                realm: '{{tenant-id}}'
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          syncOptions:
+            - CreateNamespace=true
+          retry:
+            limit: 5
+---
+# ApplicationSet for image tag auto-updates
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ceres-image-updates
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/ceres-platform/ceres-helm-charts
+        revision: main
+        files:
+          - path: 'helm/*/Chart.yaml'
+    template:
+      metadata:
+        name: '{{path.basename}}-update'
+      spec:
+        project: ceres-project
+        destination:
+          server: https://kubernetes.default.svc
+          namespace: ceres
+        source:
+          repoURL: https://github.com/ceres-platform/ceres-helm-charts
+          targetRevision: main
+          path: 'helm/{{path.basename}}'
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+---
+# ConfigMap with tenant list for ApplicationSet discovery
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ceres-tenants-list
+  namespace: argocd
+data:
+  tenants: |
+    - tenant-id: acme
+      tenant-name: ACME Corporation
+    - tenant-id: globex
+      tenant-name: Globex Inc
+    - tenant-id: initech
+      tenant-name: Initech Systems

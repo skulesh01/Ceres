@@ -1,36 +1,14 @@
-# Ceres project .gitignore
-
-# Backup artifacts and generated archives
-artifacts/
-artifacts/**
-
-# Local config with secrets
-config/.env
-.env
-
-# Python
-__pycache__/
-*.pyc
-
-# Node
-node_modules/
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Docker
-docker-compose.override.yml
-
-# Temporary files
-*.log
-*.tmp
-# Git ignore для проекта Ceres
+# .gitignore для проекта Ceres
 
 # 🔐 Секретные файлы
 config/.env
+config/.env.*
+!config/.env.example
 config/.env.*.backup
 .env.local
+.env
+.env.*
+!.env.example
 
 # 📦 Виртуальные окружения и зависимости
 venv/
@@ -68,8 +46,46 @@ Thumbs.db
 *.iml
 
 # 📁 Резервные копии
+backups/
 backups/old/
 *.backup
+*.sql
+*.tar.gz
+*.zip
+*.bak
+
+# 🐳 Docker volumes и данные
+volumes/
+data/
+*_data/
+
+# 🔐 Сертификаты и ключи
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+
+# 🔧 Caddy
+config/caddy/data/
+config/caddy/config/
+
+# 📊 Prometheus & Grafana data
+config/prometheus/data/
+config/grafana/data/
+
+# 🗄️ PostgreSQL dumps
+*.dump
+
+# 🌐 Proxmox специфичные файлы
+*.qcow2
+*.iso
+
+# 📝 Логи
+logs/
+*.log
 *.bak
 
 # 🔍 Git
@@ -83,7 +99,9 @@ build/
 coverage/
 
 # ⚠️ НЕ ИГНОРИРУЙТЕ
-# config/docker-compose.yml - НУЖЕН!
+# Compose:
+# - основной монолитный: config/docker-compose-CLEAN.yml
+# - модульный: config/compose/*.yml
 # config/.env.example - НУЖЕН!
 # scripts/ - НУЖНЫ!
-# docs/ - НУЖНА!
+# Документация: README.md и MAIN_GUIDE.md

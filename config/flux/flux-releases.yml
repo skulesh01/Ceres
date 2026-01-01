@@ -1,0 +1,316 @@
+---
+# Flux CD GitOps Stack for CERES v2.8.0
+# Alternative to ArgoCD - Git-driven continuous delivery
+# Features: Multi-tenancy, cross-cluster management, policy enforcement (Kyverno)
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: GitRepository
+metadata:
+  name: ceres-helm-charts
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: https://github.com/ceres-platform/ceres-helm-charts
+  ref:
+    branch: main
+  secretRef:
+    name: flux-github-ssh
+  # Verify GPG signature for security
+  verification:
+    mode: enable
+    secretRef:
+      name: flux-gpg-key
+---
+# Helm Repository for external charts (bitnami, prometheus, etc.)
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: bitnami
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: https://charts.bitnami.com/bitnami
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: prometheus-community
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: https://prometheus-community.github.io/helm-charts
+---
+# Kustomization for base CERES infrastructure
+apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
+kind: Kustomization
+metadata:
+  name: ceres-base
+  namespace: flux-system
+spec:
+  interval: 10m
+  sourceRef:
+    kind: GitRepository
+    name: ceres-helm-charts
+  path: ./kustomize/base
+  prune: true
+  wait: true
+  timeout: 5m
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-config
+---
+# Helm Release for CERES core services
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: ceres
+  namespace: ceres
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ceres
+      sourceRef:
+        kind: GitRepository
+        name: ceres-helm-charts
+      version: "2.8.0"
+  values:
+    replicaCount: 3
+    global:
+      domain: ceres.local
+      imagePullPolicy: IfNotPresent
+  install:
+    crds: Create
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  # Automatic image updates with SemVer
+  postRenderers:
+    - kustomize:
+        patchesStrategicMerge:
+          - apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: ceres
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: ceres
+                      imagePullPolicy: Always
+---
+# Helm Release for PostgreSQL
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: postgresql
+  namespace: ceres
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: postgresql
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+      version: "12.1.x"
+  values:
+    auth:
+      username: ceres
+      existingSecret: postgres-credentials
+      secretKeys:
+        adminPasswordKey: password
+        userPasswordKey: ceres-password
+    primary:
+      persistence:
+        enabled: true
+        size: 100Gi
+        storageClassName: ceres-database
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+---
+# Helm Release for Redis
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: redis
+  namespace: ceres
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: redis
+      sourceRef:
+        kind: HelmRepository
+        name: bitnami
+      version: "17.0.x"
+  values:
+    auth:
+      enabled: true
+      existingSecret: redis-credentials
+    master:
+      persistence:
+        enabled: true
+        size: 50Gi
+        storageClassName: ceres-cache
+    replica:
+      replicaCount: 2
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+---
+# Notification Provider for Slack
+apiVersion: notification.toolkit.fluxcd.io/v1beta2
+kind: Provider
+metadata:
+  name: slack
+  namespace: flux-system
+spec:
+  type: slack
+  address: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+---
+# Alert for deployment failures
+apiVersion: notification.toolkit.fluxcd.io/v1beta2
+kind: Alert
+metadata:
+  name: ceres-deployment-failure
+  namespace: flux-system
+spec:
+  providerRef:
+    name: slack
+  eventSeverity: error
+  eventSources:
+    - kind: HelmRelease
+      name: '*'
+---
+# Image Policy for automatic updates
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageRepository
+metadata:
+  name: ceres-registry
+  namespace: flux-system
+spec:
+  image: ceres-platform/ceres
+  interval: 1m
+  secretRef:
+    name: docker-registry-credentials
+---
+# Image Policy - automatic patch version updates
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImagePolicy
+metadata:
+  name: ceres-image-policy
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: ceres-registry
+  policy:
+    semver:
+      range: '>=2.8.0 <2.9'
+---
+# Image Automation for git updates
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: ceres-image-updates
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: ceres-helm-charts
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        email: flux@ceres.local
+        name: Flux Bot
+      messageTemplate: 'chore: update image version {{range .Updated.Images}}{{println .}}{{end}}'
+    push:
+      branch: main
+  update:
+    path: ./helm/ceres/values.yml
+    strategy: Setters
+---
+# Network Policy for flux-system
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: flux-system-deny-egress
+  namespace: flux-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow API server
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow container registry
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Allow GitHub webhooks
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Policy Enforcement with Kyverno
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-registry
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: validate-image-registry
+      match:
+        resources:
+          kinds:
+            - Pod
+      validate:
+        message: "Image must be from approved registry (ceres-platform.azurecr.io or ghcr.io)"
+        pattern:
+          spec:
+            containers:
+              - image: "ceres-platform.azurecr.io/* | ghcr.io/*"
+---
+# Pod Disruption Budget for HA
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ceres-pdb
+  namespace: ceres
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ceres

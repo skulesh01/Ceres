@@ -1,0 +1,57 @@
+# CERES Compose Module: ops
+# Purpose: operational tooling
+
+services:
+  portainer:
+    image: portainer/portainer-ce@sha256:c2353b2bd0dbfaa33faa8895222732e8823a4cf5b57ea664ba631ec3e23d842b
+    hostname: portainer
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    # UI access is intended via edge proxy only (optional/admin).
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  uptime-kuma:
+    image: louislam/uptime-kuma@sha256:3d632903e6af34139a37f18055c4f1bfd9b7205ae1138f1e5e8940ddc1d176f9
+    hostname: uptime-kuma
+    volumes:
+      - uptime_kuma_data:/app/data
+    # UI access is intended via edge proxy only (optional/admin).
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+volumes:
+  portainer_data:
+  uptime_kuma_data:

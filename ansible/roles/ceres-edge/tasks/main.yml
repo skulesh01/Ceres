@@ -1,0 +1,55 @@
+---
+# Role: ceres-edge
+# Deploys Edge services (Caddy reverse proxy)
+
+- name: Clone CERES repository
+  git:
+    repo: "{{ ceres_git_repo }}"
+    dest: "{{ ceres_install_path }}"
+    version: "{{ ceres_git_branch }}"
+    force: yes
+  become_user: ceres
+
+- name: Configure Caddyfile with backend IPs
+  template:
+    src: Caddyfile.j2
+    dest: "{{ ceres_install_path }}/config/caddy/Caddyfile"
+    owner: ceres
+    group: ceres
+    mode: '0644'
+
+- name: Create .env file
+  template:
+    src: env.j2
+    dest: "{{ ceres_install_path }}/config/.env"
+    owner: ceres
+    group: ceres
+    mode: '0600'
+
+- name: Start Edge services
+  docker_compose:
+    project_src: "{{ ceres_install_path }}"
+    project_name: ceres
+    files:
+      - config/compose/base.yml
+      - config/compose/edge.yml
+      - config/compose/monitoring.yml
+      - config/compose/ops.yml
+    state: present
+  become_user: ceres
+
+- name: Wait for Caddy to be ready
+  wait_for:
+    port: 443
+    host: localhost
+    timeout: 60
+
+- name: Wait for Prometheus
+  wait_for:
+    port: 9090
+    host: localhost
+    timeout: 60
+
+- name: Display Edge services status
+  debug:
+    msg: "Edge and Monitoring services are running on {{ inventory_hostname }}"

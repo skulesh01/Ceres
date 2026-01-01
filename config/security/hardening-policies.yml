@@ -1,0 +1,491 @@
+# CERES v3.0.0 - Production Hardening & Security Playbook
+# Kubernetes security, compliance, penetration testing, incident response
+
+---
+# SecurityPolicy - Pod Security Policy эквивалент (KubeletConfiguration)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: ceres-restricted
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+    seccomp.security.alpha.kubernetes.io/defaultProfileName: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/defaultProfileName: 'runtime/default'
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  addCapabilities: []
+  allowedCapabilities: []
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'MustRunAs'
+    seLinuxOptions:
+      level: 's0:c123,c456'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 100
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 100
+        max: 65535
+  readOnlyRootFilesystem: false
+
+---
+# NetworkPolicy - Default DENY all
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: ceres
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# NetworkPolicy - Allow specific traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-traffic
+  namespace: ceres
+spec:
+  podSelector:
+    matchLabels:
+      app: api-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: database
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+# RBAC - Least privilege service accounts
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ceres-app
+  namespace: ceres
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ceres-app-role
+  namespace: ceres
+rules:
+# Only necessary permissions
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["app-secrets"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["app-config"]
+- apiGroups: ["apps"]
+  resources: ["deployments/status"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ceres-app-binding
+  namespace: ceres
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ceres-app-role
+subjects:
+- kind: ServiceAccount
+  name: ceres-app
+  namespace: ceres
+
+---
+# Audit Logging Policy
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+# Log pod exec at RequestResponse level
+- level: RequestResponse
+  omitStages:
+  - RequestReceived
+  verbs: ["exec", "attach"]
+  resources:
+  - group: ""
+    resources: ["pods", "pods/exec", "pods/attach"]
+
+# Log all requests at Metadata level
+- level: Metadata
+  omitStages:
+  - RequestReceived
+
+# Log privileged requests at RequestResponse
+- level: RequestResponse
+  verbs: ["create", "update", "patch", "delete"]
+  resources:
+  - group: "rbac.authorization.k8s.io"
+    resources: ["clusterroles", "clusterrolebindings"]
+
+# Exclude system operations
+- level: None
+  users: ["system:kube-controller-manager", "system:kube-proxy", "system:kube-scheduler"]
+  omitStages:
+  - RequestReceived
+
+---
+# RuntimeClass для gVisor sandboxing (optional security layer)
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc
+overhead:
+  podFixed:
+    memory: "75Mi"
+    cpu: "100m"
+
+---
+# Pod Security Standard Enforcement
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ceres
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+---
+# Example hardened Pod spec
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hardened-pod-example
+  namespace: ceres
+spec:
+  serviceAccountName: ceres-app
+  
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 3000
+    fsGroup: 2000
+    seccompProfile:
+      type: RuntimeDefault
+    supplementalGroups: [4000]
+  
+  containers:
+  - name: app
+    image: app:v3.0.0
+    imagePullPolicy: Always
+    
+    # Security context per container
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 1000
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - NET_BIND_SERVICE
+      seccompProfile:
+        type: RuntimeDefault
+    
+    # Resource limits (prevents DoS)
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    
+    # Health checks
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8080
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 8080
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+    
+    # Volume mounts - read-only where possible
+    volumeMounts:
+    - name: app-config
+      mountPath: /etc/config
+      readOnly: true
+    - name: tmp
+      mountPath: /tmp
+    - name: cache
+      mountPath: /app/cache
+  
+  # Volume definitions
+  volumes:
+  - name: app-config
+    configMap:
+      name: app-config
+      defaultMode: 0400
+  - name: tmp
+    emptyDir:
+      medium: Memory
+      sizeLimit: 100Mi
+  - name: cache
+    emptyDir:
+      sizeLimit: 500Mi
+  
+  # Pod Disruption Budget
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - api-server
+          topologyKey: kubernetes.io/hostname
+
+---
+# PodDisruptionBudget - High availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ceres-app-pdb
+  namespace: ceres
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api-server
+
+---
+# Secrets encryption at rest
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+- resources:
+  - secrets
+  providers:
+  - aescbc:
+      keys:
+      - name: key1
+        secret: <base64-encoded-32-byte-key>
+  - identity: {}
+
+---
+# ValidatingAdmissionPolicy for image verification
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: image-verification
+spec:
+  failurePolicy: Fail
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    resources:
+    - group: ""
+      resources: ["pods"]
+    scope: "*"
+  matchPolicy: Exact
+  validations:
+  - expression: |
+      object.spec.containers.all(
+        container,
+        container.image.startsWith('registry.ceres.io/') ||
+        container.image.startsWith('gcr.io/') ||
+        container.image.startsWith('docker.io/')
+      )
+    message: "Container images must come from approved registries"
+
+---
+# MutatingAdmissionWebhook - Label injection for audit
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: audit-labeler
+webhooks:
+- name: audit.ceres.io
+  failurePolicy: Ignore
+  sideEffects: None
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  clientConfig:
+    service:
+      name: audit-webhook
+      namespace: ceres
+      path: "/mutate"
+    caBundle: <base64-encoded-ca>
+
+---
+# PrometheusRule for security alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: security-alerts
+  namespace: ceres
+spec:
+  groups:
+  - name: kubernetes.security
+    interval: 30s
+    rules:
+    # Alert on privilege escalation attempts
+    - alert: PrivilegeEscalationAttempt
+      expr: |
+        rate(apiserver_audit_event_total{verb="create",objectRef_kind="Pod",
+        requestObject_securityContext_allowPrivilegeEscalation="true"}[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Privilege escalation attempt detected"
+    
+    # Alert on RBAC permission denial
+    - alert: UnauthorizedAPIAccess
+      expr: |
+        rate(apiserver_authorization_decision_total{decision="deny"}[5m]) > 5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Multiple unauthorized API access attempts"
+    
+    # Alert on pod with root user
+    - alert: PodRunningAsRoot
+      expr: |
+        count(kubelet_running_pods{running_as_user="0"}) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod running as root user detected"
+
+---
+# Compliance check CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: security-compliance-check
+  namespace: ceres
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: compliance-checker
+          containers:
+          - name: checker
+            image: compliance-checker:v3.0.0
+            command:
+            - /app/check-compliance.sh
+            env:
+            - name: CHECK_PSP
+              value: "true"
+            - name: CHECK_RBAC
+              value: "true"
+            - name: CHECK_NETWORK_POLICIES
+              value: "true"
+            - name: CHECK_SECRETS
+              value: "true"
+          restartPolicy: OnFailure
+
+---
+# Falco for runtime security monitoring
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-rules
+  namespace: ceres
+data:
+  rules.yaml: |
+    - rule: Suspicious Process
+      desc: Detect suspicious processes in containers
+      condition: >
+        spawned_process and
+        container and
+        (proc.name in (ncat, netcat, nc, wget, curl, telnet, ssh))
+      output: >
+        Suspicious process started
+        (user=%user.name command=%proc.cmdline container=%container.info)
+      priority: WARNING
+      tags: [suspicious]
+
+---
+# CIS Kubernetes Benchmark ConfigMap (for audit)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cis-benchmark-checks
+  namespace: ceres
+data:
+  checks.txt: |
+    1.1.1 Ensure that the --anonymous-auth argument is set to false
+    1.1.2 Ensure that the --basic-auth-file argument is not set
+    1.1.3 Ensure that the --bind-address argument is set to 127.0.0.1
+    1.1.4 Ensure that the --insecure-allow-self-signed-cert argument is not set
+    1.1.5 Ensure that the --insecure-bind-address argument is not set
+    1.1.6 Ensure that the --insecure-port argument is set to 0
+    1.1.7 Ensure that the --secure-port argument is not set to 0
+    1.1.8 Ensure that the --profiling argument is set to false
+    1.1.9 Ensure that the --audit-log-maxage argument is set to 30 or as appropriate
+    1.1.10 Ensure that the --audit-log-maxbackup argument is set to 10 or as appropriate

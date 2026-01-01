@@ -1,0 +1,49 @@
+services:
+  opa:
+    image: openpolicyagent/opa:latest
+    hostname: opa
+    container_name: ceres-opa
+    restart: unless-stopped
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=info"
+      - "--log-format=json"
+      - "/policies"
+    volumes:
+      - ./opa/policies:/policies:ro
+      - opa_data:/data
+    ports:
+      - "8181:8181"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8181/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  opa-bundle-server:
+    image: nginx:alpine
+    hostname: opa-bundle-server
+    container_name: ceres-opa-bundle-server
+    restart: unless-stopped
+    volumes:
+      - ./opa/bundles:/usr/share/nginx/html:ro
+    networks:
+      - internal
+
+volumes:
+  opa_data:
+    name: ceres_opa_data
+
+networks:
+  internal:
+    external: true
+    name: ceres_internal

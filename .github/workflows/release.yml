@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Получаем изменения с последнего тега
+        PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+        if [ -z "$PREVIOUS_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"* %s (%h)" --no-merges)
+        else
+          CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges)
+        fi
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create Release Archive
+      run: |
+        # Создаем архив без .git и других ненужных файлов
+        mkdir -p release
+        rsync -av --progress . release/ceres \
+          --exclude .git \
+          --exclude .github \
+          --exclude release \
+          --exclude '*.log' \
+          --exclude 'volumes/' \
+          --exclude 'backups/'
+        cd release
+        zip -r ../ceres-${{ github.ref_name }}.zip ceres/
+        tar czf ../ceres-${{ github.ref_name }}.tar.gz ceres/
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body: |
+          # CERES ${{ github.ref_name }}
+          
+          ## 📦 Installation
+          
+          Download and extract the archive:
+          
+          ```bash
+          # Linux/Mac
+          wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ceres-${{ github.ref_name }}.tar.gz
+          tar xzf ceres-${{ github.ref_name }}.tar.gz
+          cd ceres
+          
+          # Windows - download .zip and extract
+          ```
+          
+          ## 🚀 Quick Start
+          
+          See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for detailed instructions.
+          
+          ## 📝 Changelog
+          
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ## 🔐 Security
+          
+          Please review [SECURITY.md](https://github.com/${{ github.repository }}/blob/main/SECURITY.md) before deployment.
+        files: |
+          ceres-${{ github.ref_name }}.zip
+          ceres-${{ github.ref_name }}.tar.gz
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

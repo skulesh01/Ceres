@@ -1,0 +1,308 @@
+{
+  "realm": "ceres-tenant-template",
+  "enabled": true,
+  "accessTokenLifespan": 3600,
+  "accessCodeLifespan": 600,
+  "accessCodeLifespanUserAction": 600,
+  "notBefore": 0,
+  "revokeRefreshToken": false,
+  "refreshTokenMaxReuse": 0,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespan": 5184000,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "rememberMe": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "defaultRoles": [
+    "user",
+    "default-roles-ceres-tenant-template"
+  ],
+  "requiredCredentials": [
+    "password"
+  ],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "otpSupportedApplications": [
+    "FreeOTP",
+    "Google Authenticator"
+  ],
+  "otpPolicyCodeReusable": false,
+  "webAuthnPolicyRpEntityName": "CERES",
+  "webAuthnPolicySignatureAlgorithms": [
+    "ES256",
+    "RS256"
+  ],
+  "webAuthnPolicyRsaAlgorithm": "RS256",
+  "webAuthnPolicyAttestationConveyancePreference": "not specified",
+  "webAuthnPolicyAuthenticatorAttachment": "not specified",
+  "webAuthnPolicyRequireResidentKey": "not specified",
+  "webAuthnPolicyUserVerificationRequirement": "not specified",
+  "webAuthnPolicyCreateTimeout": 0,
+  "webAuthnPolicyAvoidSameAuthenticatorRegistration": false,
+  "webAuthnPolicyAcceptableAaguids": [],
+  "webAuthnPolicyPasswordlessUserVerificationRequirement": "not specified",
+  "webAuthnPolicyPasswordlessCreateTimeout": 0,
+  "webAuthnPolicyPasswordlessAvoidSameAuthenticatorRegistration": false,
+  "webAuthnPolicyPasswordlessAcceptableAaguids": [],
+  "users": [],
+  "clients": [
+    {
+      "clientId": "TENANT_NAME-webapp",
+      "name": "TENANT_NAME Web Application",
+      "description": "Web application for TENANT_NAME",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://TENANT_DOMAIN/*"
+      ],
+      "webOrigins": [
+        "+",
+        "http://localhost:3000",
+        "https://TENANT_DOMAIN"
+      ],
+      "notBefore": 0,
+      "bearerTokensRequireReconfirmation": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "oauth2DeviceAuthorizationGrantEnabled": false,
+      "authorizationServicesEnabled": false,
+      "attributes": {
+        "post.logout.redirect.uris": "https://TENANT_DOMAIN/logout",
+        "token.response.type.bearer.force.refresh.token": "false",
+        "login_theme": "ceres",
+        "oidc.token.channel.logout.session.required": "true",
+        "client.session.idle.timeout": "0",
+        "client.session.max.lifespan": "0",
+        "client_credentials.use_refresh_token": "false"
+      }
+    },
+    {
+      "clientId": "TENANT_NAME-api",
+      "name": "TENANT_NAME API Client",
+      "description": "API client for TENANT_NAME backend",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerTokensRequireReconfirmation": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "oauth2DeviceAuthorizationGrantEnabled": false,
+      "authorizationServicesEnabled": false,
+      "attributes": {
+        "oidc.token.channel.logout.session.required": "false",
+        "token.response.type.bearer.force.refresh.token": "false",
+        "client.session.idle.timeout": "0",
+        "client.session.max.lifespan": "0",
+        "client_credentials.use_refresh_token": "true",
+        "use.refresh.tokens": "true"
+      }
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Tenant administrator with full access",
+        "composite": true,
+        "composites": {
+          "client": {
+            "TENANT_NAME-webapp": ["manage-account", "manage-account-links"],
+            "TENANT_NAME-api": ["manage-tenant", "view-reports"]
+          }
+        }
+      },
+      {
+        "name": "manager",
+        "description": "Tenant manager with operational access",
+        "composite": true,
+        "composites": {
+          "client": {
+            "TENANT_NAME-webapp": ["manage-account"],
+            "TENANT_NAME-api": ["view-reports"]
+          }
+        }
+      },
+      {
+        "name": "user",
+        "description": "Regular user with basic access",
+        "composite": false
+      },
+      {
+        "name": "viewer",
+        "description": "Read-only access",
+        "composite": false
+      }
+    ],
+    "client": {
+      "TENANT_NAME-webapp": [
+        {
+          "name": "manage-account",
+          "description": "Manage user account"
+        },
+        {
+          "name": "manage-account-links",
+          "description": "Manage linked accounts"
+        }
+      ],
+      "TENANT_NAME-api": [
+        {
+          "name": "manage-tenant",
+          "description": "Manage tenant configuration"
+        },
+        {
+          "name": "view-reports",
+          "description": "View tenant reports"
+        },
+        {
+          "name": "edit-data",
+          "description": "Edit tenant data"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "administrators",
+      "path": "/administrators",
+      "attributes": {
+        "tenant-role": ["admin"]
+      },
+      "realmRoles": ["admin"],
+      "clientRoles": {
+        "TENANT_NAME-api": ["manage-tenant", "view-reports"]
+      }
+    },
+    {
+      "name": "managers",
+      "path": "/managers",
+      "attributes": {
+        "tenant-role": ["manager"]
+      },
+      "realmRoles": ["manager"],
+      "clientRoles": {
+        "TENANT_NAME-api": ["view-reports"]
+      }
+    },
+    {
+      "name": "users",
+      "path": "/users",
+      "attributes": {
+        "tenant-role": ["user"]
+      },
+      "realmRoles": ["user"]
+    }
+  ],
+  "identity-providers": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "config": {
+        "useJwksUrl": "true",
+        "clientId": "GOOGLE_CLIENT_ID",
+        "clientSecret": "GOOGLE_CLIENT_SECRET",
+        "hostedDomain": "TENANT_DOMAIN"
+      }
+    },
+    {
+      "alias": "github",
+      "displayName": "GitHub",
+      "providerId": "github",
+      "enabled": true,
+      "config": {
+        "clientId": "GITHUB_CLIENT_ID",
+        "clientSecret": "GITHUB_CLIENT_SECRET",
+        "useUserAsId": "true"
+      }
+    }
+  ],
+  "password-policy": {
+    "blackLists": {
+      "passwordBlacklistPath": "/usr/lib/keycloak/data/blacklist.txt"
+    },
+    "policies": [
+      {
+        "displayName": "Length",
+        "id": "length",
+        "config": {
+          "length": "12"
+        }
+      },
+      {
+        "displayName": "Digits",
+        "id": "digits",
+        "config": {
+          "digits": "1"
+        }
+      },
+      {
+        "displayName": "Lowercase",
+        "id": "lowercase",
+        "config": {
+          "lowerCase": "1"
+        }
+      },
+      {
+        "displayName": "Uppercase",
+        "id": "uppercase",
+        "config": {
+          "upperCase": "1"
+        }
+      },
+      {
+        "displayName": "Special Characters",
+        "id": "specialChars",
+        "config": {
+          "specialChars": "1"
+        }
+      }
+    ]
+  },
+  "attributes": {
+    "_browser_header.contentSecurityPolicyReportingUrl": "",
+    "_browser_header.contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "_browser_header.xContentTypeOptions": "nosniff",
+    "_browser_header.xFrameOptions": "SAMEORIGIN",
+    "_browser_header.xXSSProtection": "1; mode=block",
+    "_browser_header.strictTransportSecurity": "max-age=31536000; includeSubDomains",
+    "cibaBackchannelTokenDeliveryMode": "poll",
+    "cibaExpiresIn": "120",
+    "cibaInterval": "5",
+    "cibaAuthRequestedUserHint": "login_hint",
+    "parRequestUriLifespan": "60",
+    "tenant_id": "TENANT_ID",
+    "tenant_name": "TENANT_NAME",
+    "tenant_domain": "TENANT_DOMAIN",
+    "tenant_created": "2026-01-01T00:00:00Z"
+  }
+}

@@ -1,0 +1,480 @@
+---
+# CERES v3.0.0 - Performance Tuning & Optimization Playbook
+# Kubernetes API server, etcd, kubelet, container runtime optimization
+# Network performance, storage optimization, CPU pinning, NUMA awareness
+
+- name: CERES Performance Tuning - Kubernetes Components
+  hosts: kubernetes_nodes
+  become: yes
+  gather_facts: yes
+  vars:
+    kernel_version_min: "5.10"
+    cgroup_version: "v2"
+  
+  tasks:
+  # ============================================================================
+  # Kernel Tuning
+  # ============================================================================
+  
+  - name: Kernel | Check kernel version
+    assert:
+      that:
+        - ansible_kernel is version(kernel_version_min, '>=')
+      fail_msg: "Kernel {{ ansible_kernel }} is less than {{ kernel_version_min }}"
+  
+  - name: Kernel | Set sysctl parameters for networking performance
+    sysctl:
+      name: "{{ item.key }}"
+      value: "{{ item.value }}"
+      sysctl_set: yes
+      state: present
+      reload: yes
+    loop:
+      # TCP buffer optimization (for high throughput)
+      - key: net.core.rmem_max
+        value: "134217728"  # 128 MB
+      - key: net.core.wmem_max
+        value: "134217728"  # 128 MB
+      - key: net.ipv4.tcp_rmem
+        value: "4096 87380 67108864"  # Default, default, max
+      - key: net.ipv4.tcp_wmem
+        value: "4096 65536 67108864"
+      
+      # Connection handling
+      - key: net.core.somaxconn
+        value: "32768"  # Default: 128
+      - key: net.ipv4.tcp_max_syn_backlog
+        value: "8192"  # Default: 1024
+      
+      # TCP timeouts optimization
+      - key: net.ipv4.tcp_tw_reuse
+        value: "1"  # Reuse TIME_WAIT sockets
+      - key: net.ipv4.tcp_fin_timeout
+        value: "30"  # Default: 60
+      
+      # UDP buffer optimization
+      - key: net.core.udp_mem
+        value: "88560 118080 177120"
+      
+      # IP fragmentation
+      - key: net.ipv4.ipfrag_high_thresh
+        value: "2147483647"
+      - key: net.ipv4.ipfrag_low_thresh
+        value: "2147483647"
+      
+      # ARP optimization
+      - key: net.ipv4.neigh.default.gc_thresh1
+        value: "4096"
+      - key: net.ipv4.neigh.default.gc_thresh2
+        value: "8192"
+      - key: net.ipv4.neigh.default.gc_thresh3
+        value: "16384"
+  
+  - name: Kernel | Enable netfilter connection tracking optimization
+    sysctl:
+      name: "{{ item.key }}"
+      value: "{{ item.value }}"
+      sysctl_set: yes
+      state: present
+    loop:
+      - key: net.netfilter.nf_conntrack_max
+        value: "2000000"
+      - key: net.netfilter.nf_conntrack_tcp_timeout_time_wait
+        value: "60"
+      - key: net.netfilter.nf_conntrack_tcp_timeout_established
+        value: "600"
+  
+  - name: Kernel | Enable BBR congestion control
+    sysctl:
+      name: "{{ item.key }}"
+      value: "{{ item.value }}"
+      sysctl_set: yes
+      state: present
+    loop:
+      - key: net.ipv4.tcp_congestion_control
+        value: "bbr"
+      - key: net.core.default_qdisc
+        value: "fq"
+  
+  # ============================================================================
+  # Container Runtime Optimization (containerd)
+  # ============================================================================
+  
+  - name: Containerd | Create performance config directory
+    file:
+      path: /etc/containerd
+      state: directory
+      mode: '0755'
+  
+  - name: Containerd | Configure containerd for performance
+    template:
+      src: containerd-config.toml.j2
+      dest: /etc/containerd/config.toml
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+    vars:
+      snapshotter: "overlayfs"
+      oci_runtimes:
+        - name: "runc"
+          runtime_engine: "runc"
+          runtime_root: ""
+        - name: "runsc"
+          runtime_engine: "runsc"
+          runtime_root: "/run/runsc"
+      metrics_enabled: true
+      cgroup_version: "v2"
+    notify: Restart containerd
+  
+  - name: Containerd | Optimize image layer caching
+    blockinfile:
+      path: /etc/containerd/config.toml
+      marker: "# {mark} IMAGE CACHING"
+      block: |
+        [plugins."io.containerd.grpc.v1.cri".image_service]
+        base_image_fs_path = ""
+        max_concurrent_downloads = 10
+        max_concurrent_upload_requests = 10
+    notify: Restart containerd
+  
+  # ============================================================================
+  # Kubelet Optimization
+  # ============================================================================
+  
+  - name: Kubelet | Create kubelet config directory
+    file:
+      path: /var/lib/kubelet
+      state: directory
+      mode: '0755'
+  
+  - name: Kubelet | Optimize kubelet parameters
+    template:
+      src: kubelet-config.yaml.j2
+      dest: /var/lib/kubelet/config.yaml
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+    vars:
+      cgroupDriver: "systemd"
+      maxPods: 250
+      podsPerCore: 50
+      cpuCFSQuota: true
+      cpuCFSQuotaPeriod: "100ms"
+      memorySwap: "NoSwap"
+    notify: Restart kubelet
+  
+  - name: Kubelet | Enable CPU manager (CPU pinning)
+    lineinfile:
+      path: /var/lib/kubelet/config.yaml
+      line: "cpuManagerPolicy: static"
+      insertafter: "^kubeletConfiguration:"
+  
+  - name: Kubelet | Enable NUMA awareness
+    lineinfile:
+      path: /var/lib/kubelet/config.yaml
+      line: "topologyManagerPolicy: best-effort"
+      insertafter: "^kubeletConfiguration:"
+  
+  - name: Kubelet | Set topology manager scope to pod
+    lineinfile:
+      path: /var/lib/kubelet/config.yaml
+      line: "topologyManagerScope: pod"
+      insertafter: "^topologyManagerPolicy:"
+  
+  - name: Kubelet | Enable memory manager for guaranteed pods
+    lineinfile:
+      path: /var/lib/kubelet/config.yaml
+      line: "memoryManagerPolicy: Static"
+      insertafter: "^kubeletConfiguration:"
+  
+  # ============================================================================
+  # kube-apiserver Optimization
+  # ============================================================================
+  
+  - name: API Server | Optimize apiserver parameters
+    template:
+      src: kube-apiserver-manifests.yaml.j2
+      dest: /etc/kubernetes/manifests/kube-apiserver.yaml
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+    vars:
+      max_request_body_size: "3145728"  # 3 MB
+      event_ttl: "12h"
+      database_query_timeout: "1m"
+      storage_backend: "etcd3"
+    notify: Restart API server
+  
+  - name: API Server | Enable API priority and fairness
+    blockinfile:
+      path: /etc/kubernetes/manifests/kube-apiserver.yaml
+      marker: "# {mark} APF"
+      block: |
+        - --enable-priority-and-fairness=true
+        - --max-requests-inflight=3000
+        - --max-mutating-requests-inflight=1000
+    notify: Restart API server
+  
+  # ============================================================================
+  # etcd Optimization
+  # ============================================================================
+  
+  - name: etcd | Configure etcd for performance
+    template:
+      src: etcd-config.yaml.j2
+      dest: /etc/kubernetes/manifests/etcd.yaml
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+    vars:
+      heartbeat_interval: 100ms
+      election_timeout: 1000ms
+      snapshot_count: 10000
+      quota_backend_bytes: "8589934592"  # 8 GB
+    notify: Restart etcd
+  
+  - name: etcd | Configure WAL fsync behaviour
+    blockinfile:
+      path: /etc/kubernetes/manifests/etcd.yaml
+      marker: "# {mark} WAL"
+      block: |
+        --unsafe-no-fsync=false
+        --max-concurrent-backends=2048
+    notify: Restart etcd
+  
+  # ============================================================================
+  # Network Performance Tuning
+  # ============================================================================
+  
+  - name: Network | Enable network multithreading (if kernel supports)
+    sysctl:
+      name: net.core.rps_sock_flow_entries
+      value: "32768"
+      sysctl_set: yes
+      state: present
+  
+  - name: Network | Configure NIC interrupt coalescing (if available)
+    shell: |
+      for nic in $(ls /sys/class/net/ | grep -v lo); do
+        ethtool -C "$nic" rx-frames 64 rx-usecs 20 || true
+      done
+    changed_when: false
+    ignore_errors: yes
+  
+  # ============================================================================
+  # Disk I/O Optimization
+  # ============================================================================
+  
+  - name: Disk I/O | Configure I/O scheduler for SSDs
+    shell: |
+      for disk in $(lsblk -nd -o NAME | grep -E '^[a-z]'); do
+        echo "none" > /sys/block/"$disk"/queue/scheduler || true
+      done
+    changed_when: false
+  
+  - name: Disk I/O | Configure read-ahead
+    shell: |
+      for disk in $(lsblk -nd -o NAME | grep -E '^[a-z]'); do
+        blockdev --setra 4096 "/dev/$disk" || true
+      done
+    changed_when: false
+  
+  - name: Disk I/O | Increase maximum dirty buffer time
+    sysctl:
+      name: vm.dirty_writeback_centisecs
+      value: "3000"
+      sysctl_set: yes
+      state: present
+  
+  # ============================================================================
+  # Memory Management
+  # ============================================================================
+  
+  - name: Memory | Disable swappiness
+    sysctl:
+      name: vm.swappiness
+      value: "0"
+      sysctl_set: yes
+      state: present
+  
+  - name: Memory | Increase virtual memory map count (for containers)
+    sysctl:
+      name: vm.max_map_count
+      value: "262144"
+      sysctl_set: yes
+      state: present
+  
+  - name: Memory | Enable overcommit (with limits)
+    sysctl:
+      name: vm.overcommit_memory
+      value: "1"
+      sysctl_set: yes
+      state: present
+  
+  # ============================================================================
+  # CPU Pinning for Critical Services (optional)
+  # ============================================================================
+  
+  - name: CPU | Reserve CPUs for system
+    template:
+      src: kubelet-reserved.yaml.j2
+      dest: /var/lib/kubelet/config.yaml
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+    vars:
+      reserved_cpus: "0-3"  # First 4 CPUs for system
+      kube_reserved_cpu: "1000m"
+      system_reserved_cpu: "500m"
+    notify: Restart kubelet
+  
+  # ============================================================================
+  # Monitoring Optimization Targets
+  # ============================================================================
+  
+  - name: Monitoring | Create performance metrics collection
+    template:
+      src: performance-metrics.yml.j2
+      dest: /etc/prometheus/rules/performance.yml
+      owner: root
+      group: root
+      mode: '0644'
+    vars:
+      collection_interval: 30s
+  
+  - name: Monitoring | Alert on performance degradation
+    blockinfile:
+      path: /etc/prometheus/rules/performance.yml
+      marker: "# {mark} PERF ALERTS"
+      block: |
+        groups:
+        - name: performance.rules
+          interval: 30s
+          rules:
+          - alert: APIServerLatencyHigh
+            expr: histogram_quantile(0.99, apiserver_request_duration_seconds_bucket) > 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "API server p99 latency > 1s"
+          
+          - alert: etcdCommitDurationHigh
+            expr: histogram_quantile(0.99, etcd_commit_duration_seconds_bucket) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "etcd commit p99 duration > 500ms"
+          
+          - alert: KubeletCGroupMemoryPressure
+            expr: kubelet_memory_limits_bytes > 0.8 * kubelet_memory_working_set_bytes
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "kubelet memory pressure detected"
+  
+  # ============================================================================
+  # Validation & Testing
+  # ============================================================================
+  
+  - name: Validation | Test network performance
+    shell: |
+      iperf3 -c {{ hostvars[groups['kubernetes_nodes'][1]].ansible_default_ipv4.address }} \
+             -t 10 -P 4 -R 2>&1 | tail -20
+    when: inventory_hostname == groups['kubernetes_nodes'][0]
+    changed_when: false
+    ignore_errors: yes
+  
+  - name: Validation | Verify kernel parameters
+    shell: |
+      sysctl net.core.rmem_max net.core.wmem_max net.core.somaxconn
+    changed_when: false
+    register: sysctl_check
+  
+  - name: Validation | Display sysctl check results
+    debug:
+      var: sysctl_check.stdout_lines
+  
+  # ============================================================================
+  # Handler Definitions
+  # ============================================================================
+  
+  handlers:
+  - name: Restart containerd
+    systemd:
+      name: containerd
+      state: restarted
+      daemon_reload: yes
+  
+  - name: Restart kubelet
+    systemd:
+      name: kubelet
+      state: restarted
+      daemon_reload: yes
+  
+  - name: Restart API server
+    shell: |
+      kubectl delete -f /etc/kubernetes/manifests/kube-apiserver.yaml
+      sleep 10
+      kubectl apply -f /etc/kubernetes/manifests/kube-apiserver.yaml
+    become_user: root
+    ignore_errors: yes
+  
+  - name: Restart etcd
+    shell: |
+      kubectl delete -f /etc/kubernetes/manifests/etcd.yaml
+      sleep 10
+      kubectl apply -f /etc/kubernetes/manifests/etcd.yaml
+    become_user: root
+    ignore_errors: yes
+
+---
+# Additional playbook for application-level performance tuning
+- name: CERES Application Performance Tuning
+  hosts: ceres_applications
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+  - name: App | Configure connection pooling
+    blockinfile:
+      path: /etc/app/config.yaml
+      marker: "# {mark} CONNECTION POOLING"
+      block: |
+        database:
+          connection_pool_size: 50
+          max_overflow: 20
+          pool_recycle: 3600
+        redis:
+          connection_pool_size: 100
+          socket_keepalive: true
+  
+  - name: App | Enable query caching
+    blockinfile:
+      path: /etc/app/config.yaml
+      marker: "# {mark} QUERY CACHING"
+      block: |
+        cache:
+          backend: redis
+          ttl: 3600
+          key_prefix: "ceres"
+          compression: true
+  
+  - name: App | Configure async task workers
+    blockinfile:
+      path: /etc/app/config.yaml
+      marker: "# {mark} ASYNC WORKERS"
+      block: |
+        celery:
+          worker_pool: prefork
+          worker_processes: 4
+          worker_prefetch_multiplier: 4
+          task_compression: gzip
+          result_backend: redis

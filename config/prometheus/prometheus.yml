@@ -1,1 +1,65 @@
-global:\n  scrape_interval: 15s\n\nscrape_configs:\n  - job_name: 'prometheus'\n    static_configs:\n      - targets: ['localhost:9090']\n
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ceres-prod'
+    environment: 'production'
+
+# NOTE:
+# This config is used by docker-compose-CLEAN.yml.
+# Keep it compatible with the current minimal stack.
+# Optional targets from the original plan are left below as commented blocks.
+
+# Optional (requires Alertmanager service):
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
+
+rule_files:
+  - 'alert-rules.yml'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Optional: reverse proxy metrics (requires Traefik service)
+  # - job_name: 'traefik'
+  #   static_configs:
+  #     - targets: ['traefik:8080']
+  #   metrics_path: '/metrics'
+
+  # Optional: host metrics (requires node-exporter service)
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+
+  # Container metrics (cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
+
+  # Optional: application targets
+  # Taiga requires taiga service:
+  # - job_name: 'taiga'
+  #   static_configs:
+  #     - targets: ['taiga:80']
+  #   scrape_interval: 60s
+
+  # Note:
+  # PostgreSQL/Redis metrics require exporters (postgres_exporter/redis_exporter).
+
+  - job_name: 'postgres_exporter'
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+    metrics_path: '/metrics'
+
+  - job_name: 'redis_exporter'
+    static_configs:
+      - targets: ['redis_exporter:9121']
+    metrics_path: '/metrics'
+

@@ -1,0 +1,35 @@
+---
+# Ansible Inventory - Development Environment
+
+all:
+  vars:
+    ansible_user: ceres
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_python_interpreter: /usr/bin/python3
+    
+    ceres_domain: dev.ceres.local
+    ceres_install_path: /opt/ceres
+    ceres_git_repo: https://github.com/yourusername/ceres.git
+    ceres_git_branch: develop
+    environment: development
+
+  children:
+    ceres_cluster:
+      children:
+        core_vms:
+          hosts:
+            ceres-core-dev:
+              ansible_host: 192.168.1.20
+              vm_role: core
+              
+        apps_vms:
+          hosts:
+            ceres-apps-dev:
+              ansible_host: 192.168.1.21
+              vm_role: apps
+              
+        edge_vms:
+          hosts:
+            ceres-edge-dev:
+              ansible_host: 192.168.1.22
+              vm_role: edge

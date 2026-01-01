@@ -1,0 +1,6 @@
+# CERES Compose Module: base
+# Purpose: shared primitives used by all modular compose stacks
+
+networks:
+  internal:
+    driver: bridge

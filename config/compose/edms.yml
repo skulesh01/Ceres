@@ -1,0 +1,161 @@
+# CERES Compose Module: edms
+# Purpose: document management + approval workflows via Mayan EDMS (web UI)
+
+services:
+  mayan-redis:
+    image: redis:7.4.5
+    hostname: mayan-redis
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --databases
+      - "3"
+      - --maxmemory
+      - "100mb"
+      - --maxclients
+      - "500"
+      - --maxmemory-policy
+      - "allkeys-lru"
+      - --save
+      - ""
+      - --tcp-backlog
+      - "256"
+      - --requirepass
+      - ${MAYAN_REDIS_PASSWORD:?Set MAYAN_REDIS_PASSWORD in config/.env}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${MAYAN_REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - mayan_redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  mayan-rabbitmq:
+    image: rabbitmq:4.1.4-management
+    hostname: mayan-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MAYAN_RABBITMQ_USER:-mayan}
+      RABBITMQ_DEFAULT_PASS: ${MAYAN_RABBITMQ_PASSWORD:?Set MAYAN_RABBITMQ_PASSWORD in config/.env}
+      RABBITMQ_DEFAULT_VHOST: ${MAYAN_RABBITMQ_VHOST:-mayan}
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: ${MAYAN_RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS:--rabbit consumer_timeout ${MAYAN_RABBITMQ_CONSUMER_TIMEOUT:-1800000}}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - mayan_rabbitmq_data:/var/lib/rabbitmq
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  mayan-db-init:
+    image: postgres@sha256:aa7b1ef595e165f0b780162e3a41edd0a7ed3ea672eb8a0f81615ba725e62bc5
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        echo "Ensuring mayan_db exists..."
+        export PGPASSWORD="${POSTGRES_PASSWORD}"
+        if psql -h postgres -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='mayan_db'" | grep -q 1; then
+          echo "mayan_db already exists."
+        else
+          psql -h postgres -U postgres -d postgres -c "CREATE DATABASE mayan_db;"
+          echo "Created mayan_db."
+        fi
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
+
+  mayan-setup:
+    image: mayanedms/mayanedms:s4
+    hostname: mayan-setup
+    environment:
+      MAYAN_DOCKER_WAIT: "postgres:5432 mayan-rabbitmq:5672 mayan-redis:6379"
+      MAYAN_CELERY_BROKER_URL: "amqp://${MAYAN_RABBITMQ_USER:-mayan}:${MAYAN_RABBITMQ_PASSWORD}@mayan-rabbitmq:5672/${MAYAN_RABBITMQ_VHOST:-mayan}"
+      MAYAN_CELERY_RESULT_BACKEND: "redis://:${MAYAN_REDIS_PASSWORD}@mayan-redis:6379/1"
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan_db','PASSWORD':'${POSTGRES_PASSWORD}','USER':'postgres','HOST':'postgres','PORT':5432,'CONN_MAX_AGE':0}}"
+      MAYAN_LOCK_MANAGER_BACKEND: "mayan.apps.lock_manager.backends.redis_lock.RedisLock"
+      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:${MAYAN_REDIS_PASSWORD}@mayan-redis:6379/2'}"
+    command:
+      - run_initial_setup_or_perform_upgrade
+    depends_on:
+      mayan-db-init:
+        condition: service_completed_successfully
+      mayan-rabbitmq:
+        condition: service_healthy
+      mayan-redis:
+        condition: service_healthy
+    volumes:
+      - mayan_data:/var/lib/mayan
+    networks:
+      - internal
+    restart: "no"
+
+  mayan:
+    image: mayanedms/mayanedms:s4
+    hostname: mayan
+    environment:
+      MAYAN_DOCKER_WAIT: "postgres:5432 mayan-rabbitmq:5672 mayan-redis:6379"
+      MAYAN_CELERY_BROKER_URL: "amqp://${MAYAN_RABBITMQ_USER:-mayan}:${MAYAN_RABBITMQ_PASSWORD}@mayan-rabbitmq:5672/${MAYAN_RABBITMQ_VHOST:-mayan}"
+      MAYAN_CELERY_RESULT_BACKEND: "redis://:${MAYAN_REDIS_PASSWORD}@mayan-redis:6379/1"
+      MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'mayan_db','PASSWORD':'${POSTGRES_PASSWORD}','USER':'postgres','HOST':'postgres','PORT':5432,'CONN_MAX_AGE':0}}"
+      MAYAN_LOCK_MANAGER_BACKEND: "mayan.apps.lock_manager.backends.redis_lock.RedisLock"
+      MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:${MAYAN_REDIS_PASSWORD}@mayan-redis:6379/2'}"
+    depends_on:
+      mayan-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "/opt/mayan-edms/bin/python -c \"import sys,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5); sys.exit(0 if r.status<400 else 1)\""
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mayan_data:/var/lib/mayan
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+
+volumes:
+  mayan_data:
+  mayan_redis_data:
+  mayan_rabbitmq_data:

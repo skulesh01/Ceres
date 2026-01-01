@@ -1,0 +1,126 @@
+name: Ceres Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy"
+        default: "main"
+        required: true
+      app_dir:
+        description: "Remote app directory"
+        default: "/opt/ceres"
+        required: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make test scripts executable
+        run: chmod +x tests/*.sh || true
+
+      - name: Run full test suite
+        run: ./tests/run_tests.sh
+
+  deploy:
+    needs: tests
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
+      DEPLOY_BRANCH: ${{ github.event.inputs.branch }}
+      DEPLOY_PATH: ${{ github.event.inputs.app_dir }}
+      REPO_SLUG: ${{ github.repository }}
+    steps:
+      - name: Checkout (for repo metadata)
+        uses: actions/checkout@v4
+
+      - name: Start ssh-agent and add key
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+
+      - name: Configure known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy to Kubernetes
+        run: |
+          set -e
+          if [ -z "${DEPLOY_HOST}" ] || [ -z "${DEPLOY_USER}" ]; then
+            echo "DEPLOY_HOST and DEPLOY_USER secrets must be set" >&2
+            exit 1
+          fi
+
+          ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" <<'SSH_EOF'
+          set -e
+          
+          APP_DIR="${DEPLOY_PATH}"
+          BRANCH="${DEPLOY_BRANCH}"
+          REPO_SLUG="${REPO_SLUG}"
+          
+          echo "[DEPLOY] Initializing Kubernetes deployment..."
+          
+          # 1. Clone/update repository
+          mkdir -p "$APP_DIR"
+          if [ ! -d "$APP_DIR/.git" ]; then
+            git clone "https://github.com/${REPO_SLUG}.git" "$APP_DIR"
+          fi
+          
+          cd "$APP_DIR"
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+          
+          # 2. Make scripts executable
+          chmod +x scripts/*.sh scripts/deploy-ops/*.sh config/*.sh 2>/dev/null || true
+          
+          # 3. Run bootstrap checks
+          echo "[DEPLOY] Running bootstrap checks..."
+          bash scripts/check-dependencies.sh || echo "Warning: some dependencies missing"
+          bash scripts/init-environment.sh || true
+          
+          # 4. Deploy with kubectl
+          echo "[DEPLOY] Applying Kubernetes manifests..."
+          export KUBECONFIG=~/.kube/config
+          
+          # Apply all manifests from config/k8s or use docker-compose
+          if [ -d "config/k8s" ]; then
+            kubectl apply -f config/k8s/ --recursive
+          elif [ -f "docker-compose.yml" ]; then
+            echo "[DEPLOY] Using docker-compose..."
+            docker-compose -f config/compose/base.yml -f config/compose/apps.yml up -d
+          else
+            echo "[WARN] No manifests or compose files found"
+          fi
+          
+          # 5. Run smoke tests
+          echo "[DEPLOY] Running smoke tests..."
+          if [ -x "scripts/deploy-ops/smoke.sh" ]; then
+            bash scripts/deploy-ops/smoke.sh || echo "Smoke tests failed (non-fatal)"
+          fi
+          
+          echo "[DEPLOY] Deployment complete!"
+          
+          # 6. Print deployment status
+          echo ""
+          echo "[STATUS] Kubernetes resources:"
+          kubectl get pods,svc,ingress -A 2>/dev/null || echo "kubectl not available"
+          
+          SSH_EOF
+
+      - name: Upload deployment logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-logs
+          path: |
+            logs/
+            ./*.log
+          retention-days: 7

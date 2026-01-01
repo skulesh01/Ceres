@@ -1,0 +1,203 @@
+name: GitOps - Auto Deploy
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'config/**'
+      - 'scripts/**'
+      - '.github/workflows/gitops.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose files
+        run: |
+          for file in config/compose/*.yml; do
+            echo "Validating $file..."
+            docker compose -f "$file" config > /dev/null
+          done
+
+      - name: Validate shell scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          find scripts -name "*.sh" -exec shellcheck {} +
+
+      - name: Validate PowerShell scripts
+        uses: devblackops/github-action-psscriptanalyzer@master
+        with:
+          rootPath: scripts
+          sendComment: true
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Check secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [validate, security-scan]
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: development
+      url: https://dev.ceres.local
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEV_SSH_KEY }}
+
+      - name: Deploy via Ansible
+        run: |
+          pip install ansible
+          cd ansible
+          ansible-playbook -i inventory/development.yml deploy.yml \
+            --extra-vars "git_branch=${{ github.ref_name }}"
+
+      - name: Health check
+        run: |
+          sleep 30
+          curl -f https://dev.ceres.local/health || exit 1
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [validate, security-scan]
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    environment:
+      name: staging
+      url: https://staging.ceres.local
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Deploy via Ansible
+        run: |
+          pip install ansible
+          cd ansible
+          ansible-playbook -i inventory/staging.yml deploy.yml \
+            --extra-vars "git_branch=${{ github.head_ref }}"
+
+      - name: Run smoke tests
+        run: |
+          cd tests
+          ./smoke-tests.sh staging
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [validate, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://ceres.company.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Backup before deploy
+        run: |
+          ssh ceres-prod "cd /opt/ceres && ./scripts/backup.sh"
+
+      - name: Deploy via Ansible
+        run: |
+          pip install ansible
+          cd ansible
+          ansible-playbook -i inventory/production.yml deploy.yml \
+            --extra-vars "git_branch=${{ github.ref_name }}" \
+            --extra-vars "enable_rollback=true"
+
+      - name: Health check
+        run: |
+          sleep 60
+          curl -f https://ceres.company.com/health || exit 1
+
+      - name: Notify Mattermost
+        if: always()
+        uses: mattermost/action-mattermost-notify@master
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK }}
+          TEXT: "🚀 CERES Production deployed: ${{ github.sha }}"
+
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    if: failure() && github.ref == 'refs/heads/main'
+    needs: deploy-production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Execute rollback
+        run: |
+          ssh ceres-prod "cd /opt/ceres && ./scripts/rollback-services.sh"
+
+      - name: Notify team
+        uses: mattermost/action-mattermost-notify@master
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK }}
+          TEXT: "⚠️ CERES Production rollback executed: ${{ github.sha }}"

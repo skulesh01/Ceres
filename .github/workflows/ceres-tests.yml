@@ -1,0 +1,130 @@
+name: Ceres Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install lint tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck yamllint
+
+      - name: Shellcheck (tests/scripts)
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(tests/*.sh scripts/*.sh)
+          if [ ${#files[@]} -gt 0 ]; then
+            shellcheck "${files[@]}"
+          else
+            echo "No shell scripts to lint"
+          fi
+
+      - name: Yamllint workflows
+        run: |
+          yamllint -d "{extends: default, rules: {line-length: {max: 160}}}" .github/workflows
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Gitleaks
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          args: "detect --no-banner --redact"
+
+      - name: Trivy FS scan (HIGH,CRITICAL)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  terraform:
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('**/*.tf') != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform fmt (check)
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate (all dirs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t dirs < <(find . -name '*.tf' -printf '%h\n' | sort -u)
+          for d in "${dirs[@]}"; do
+            echo "Validating $d"
+            (cd "$d" && terraform init -backend=false -input=false >/dev/null && terraform validate -no-color)
+          done
+
+  kubeconform:
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('config/**/*.yml', 'config/**/*.yaml') != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz | sudo tar -xz -C /usr/local/bin kubeconform
+
+      - name: Validate Kubernetes/Istio manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find config -type f \( -name '*.yml' -o -name '*.yaml' \) | grep -q .; then
+            find config -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | \
+              xargs -0 kubeconform -strict -ignore-missing-schemas
+          else
+            echo "No YAML manifests to validate"
+          fi
+
+  tests:
+    needs: [lint, security]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make test scripts executable
+        run: |
+          chmod +x tests/*.sh || true
+
+      - name: Run full test suite (bash)
+        run: |
+          ./tests/run_tests.sh
+
+      - name: Archive test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ceres-test-artifacts
+          path: |
+            tests/**/test-results*.json
+            tests/FULL_TEST_REPORT.md
+            tests/TEST_DOCUMENTATION.md
+            tests/TESTING_SUMMARY.md
+            tests/TESTING_COMPLETE.md
+            tests/TESTING_RESULTS.md
+            tests/TESTING_INDEX.md
+            tests/DEPLOYMENT_PLAN.md

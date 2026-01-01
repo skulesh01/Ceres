@@ -1,0 +1,464 @@
+---
+# CERES v3.0.0 - Istio Service Mesh Installation & Configuration
+# Production-grade service mesh for microservices communication, traffic management, security
+# Istio 1.20+ with mTLS, traffic policies, observability integration
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+  labels:
+    istio-injection: disabled
+---
+# IstioOperator - управляемое развёртывание Istio через оператор
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: ceres-istio
+  namespace: istio-system
+spec:
+  profile: production
+  
+  # Компоненты Istio
+  components:
+    # Ingress Gateway (внешний трафик)
+    ingressGateways:
+    - name: ceres-ingress
+      namespace: istio-system
+      enabled: true
+      k8s:
+        replicas: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 1024Mi
+        serviceType: LoadBalancer
+        hpa:
+          enabled: true
+          minReplicas: 3
+          maxReplicas: 10
+          targetCPUUtilizationPercentage: 70
+        podDisruptionBudget:
+          minAvailable: 2
+        service:
+          ports:
+          - name: status-port
+            port: 15021
+            protocol: TCP
+          - name: http2
+            port: 80
+            protocol: TCP
+          - name: https
+            port: 443
+            protocol: TCP
+          - name: tcp
+            port: 31400
+            protocol: TCP
+
+    # Egress Gateway (исходящий трафик)
+    egressGateways:
+    - name: ceres-egress
+      namespace: istio-system
+      enabled: true
+      k8s:
+        replicas: 2
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        podDisruptionBudget:
+          minAvailable: 1
+
+    # Istiod (control plane)
+    pilot:
+      enabled: true
+      k8s:
+        replicas: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 1024Mi
+        hpa:
+          enabled: true
+          minReplicas: 3
+          maxReplicas: 5
+          targetCPUUtilizationPercentage: 80
+        podDisruptionBudget:
+          minAvailable: 2
+        env:
+        - name: PILOT_MAX_NAMESPACE_CONCURRENCY
+          value: "50"
+        - name: PILOT_DEBOUNCE_AFTER
+          value: "100ms"
+        - name: PILOT_DEBOUNCE_MAX
+          value: "10s"
+
+  # Сетевые конфигурации
+  networkPolicies:
+    enabled: true
+  
+  # mTLS (mutual TLS) - обязательно
+  meshConfig:
+    # Режим mutual TLS
+    mtls:
+      enabled: true
+      mode: STRICT  # Требует mTLS для всех pods
+    
+    # Политики трафика по умолчанию
+    outboundTrafficPolicy:
+      mode: REGISTRY_ONLY  # Только к сервисам в Service Registry
+    
+    # DNS - автоматическое открытие sidecar
+    dnsDomain: svc.cluster.local
+    
+    # Timeouts
+    connectTimeout: 10s
+    
+    # Трейсинг - интеграция с Jaeger/Zipkin
+    enableTracing: true
+    defaultConfig:
+      tracing:
+        tlsCertPath: /etc/istio/custom-certs/ca-cert.pem
+    
+    # Метрики для Prometheus
+    enablePrometheusMerge: true
+    prometheusPort: 15000
+    
+    # Сертификаты
+    caCertificates:
+    - name: istiod-ca
+      namespace: istio-system
+    
+    # TCP keepalive
+    tcpKeepalive:
+      time: 7200s
+      interval: 75s
+      probes: 9
+
+  # Значения для Helm chart
+  values:
+    global:
+      # Proxy configuration
+      proxy:
+        autoInject: enabled
+        privileged: false
+        enableCoreDumps: false
+        resources:
+          requests:
+            cpu: 10m
+            memory: 40Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        logLevel: warning
+        
+        # Probes для sidecar
+        startup:
+          initialDelaySeconds: 0
+          periodSeconds: 1
+          failureThreshold: 30
+        readiness:
+          initialDelaySeconds: 1
+          periodSeconds: 2
+          failureThreshold: 30
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 15 && kill -TERM 1
+      
+      # Control plane
+      istiod:
+        # Хост для discovery service
+        enabled: true
+        
+        # Настройки памяти
+        resourceQuotas:
+          enabled: true
+        
+        # Leader election для HA
+        leaderElection:
+          enabled: true
+
+# Конфигурация для Kubernetes API
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: PeerAuthentication
+metadata:
+  name: ceres-default
+  namespace: istio-system
+spec:
+  # Глобальная mTLS политика
+  mtls:
+    mode: STRICT
+---
+# Namespace-level mTLS override (для опциональных namespaces)
+apiVersion: networking.istio.io/v1alpha3
+kind: PeerAuthentication
+metadata:
+  name: ceres-permissive
+  namespace: istio-system
+spec:
+  mtls:
+    mode: PERMISSIVE
+---
+# AuthorizationPolicy - контроль доступа по умолчанию
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ceres-default-deny
+  namespace: istio-system
+spec:
+  # По умолчанию - DENY все
+  {}
+---
+# Telemetry - интеграция с observability stack
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: ceres-tracing
+  namespace: istio-system
+spec:
+  # Трейсинг конфигурация
+  tracing:
+  - providers:
+    - name: jaeger
+    randomSamplingPercentage: 100.0
+    useRequestIdForTraceSampling: true
+    customTags:
+      literals:
+      - name: tenant_id
+        value: "unknown"
+      headers:
+      - name: x-tenant-id
+        header:
+          name: x-tenant-id
+      environment:
+      - name: pod_namespace
+        environmentVariable:
+          name: POD_NAMESPACE
+---
+# VirtualService для Ingress Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ceres-gateway
+  namespace: istio-system
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - ceres-gateway
+  http:
+  # Route для HTTP->HTTPS redirect
+  - match:
+    - uri:
+        prefix: "/"
+    redirect:
+      scheme: https
+      port: 443
+---
+# Gateway - определение входной точки
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: ceres-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTP (только для redirect)
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+  # HTTPS (основной)
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: ceres-tls-cert
+    hosts:
+    - "*.ceres.io"
+    - "ceres.io"
+  # TCP для других сервисов
+  - port:
+      number: 5432
+      name: postgres
+      protocol: TCP
+    hosts:
+    - "*"
+---
+# ServiceEntry для external services
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-services
+  namespace: istio-system
+spec:
+  hosts:
+  - external-api.example.com
+  - monitoring.external.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  - number: 5432
+    name: postgres
+    protocol: TCP
+  location: OUTSIDE_CLUSTER
+  resolution: DNS
+---
+# DestinationRule - политики балансировки нагрузки
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ceres-default
+  namespace: istio-system
+spec:
+  host: "*.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 100
+        maxRequestsPerConnection: 2
+        h2UpgradePolicy: UPGRADE
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minRequestVolume: 5
+      splitExternalLocalOriginErrors: true
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# RequestAuthentication - валидация JWT токенов
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: ceres-jwt
+  namespace: istio-system
+spec:
+  jwtRules:
+  - issuer: "https://keycloak.ceres.io/realms/master"
+    jwksUri: "https://keycloak.ceres.io/realms/master/protocol/openid-connect/certs"
+    audiences:
+    - ceres-api
+    forwardOriginalToken: true
+    outputPayloadToHeader: "x-jwt-payload"
+---
+# ServiceMonitor для Prometheus интеграции
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-metrics
+  namespace: istio-system
+  labels:
+    app: istio
+spec:
+  selector:
+    matchLabels:
+      app: istiod
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-envoy-metrics
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      app: istio-ingressgateway
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+# PrometheusRule - алерты для Istio
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: istio-alerts
+  namespace: istio-system
+spec:
+  groups:
+  - name: istio.rules
+    interval: 30s
+    rules:
+    # Высокий процент 5xx ошибок
+    - alert: IstioHighErrorRate
+      expr: |
+        (sum(rate(istio_request_total{response_code=~"5.."}[5m])) by (destination_service))
+        /
+        (sum(rate(istio_request_total[5m])) by (destination_service)) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Высокий процент ошибок в {{ $labels.destination_service }}"
+        
+    # Высокие задержки
+    - alert: IstioHighLatency
+      expr: |
+        histogram_quantile(0.99, 
+          sum(rate(istio_request_duration_milliseconds_bucket[5m])) by (destination_service, le)
+        ) > 1000
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Высокая задержка в {{ $labels.destination_service }}"
+    
+    # Pod был вытеснен (ejected) из балансировщика
+    - alert: IstioOutlierDetected
+      expr: |
+        sum(increase(envoy_cluster_outlier_detection_ejections_enforced_total[5m])) by (cluster_name) > 0
+      for: 1m
+      labels:
+        severity: info
+      annotations:
+        summary: "Pod вытеснен из балансировщика: {{ $labels.cluster_name }}"
+
+---
+# ServiceEntry для Kubernetes API (для mesh expansion)
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: kubernetes-api
+  namespace: istio-system
+spec:
+  hosts:
+  - kubernetes.default
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: CLUSTER_INTERNAL
+  resolution: NONE

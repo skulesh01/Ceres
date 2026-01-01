@@ -1,0 +1,118 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  
+  zipkin:
+    endpoint: 0.0.0.0:9411
+  
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14250
+  
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8888']
+  
+  # Host metrics
+  hostmetrics:
+    collection_interval: 60s
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+      load:
+      memory:
+      network:
+      paging:
+      processes:
+
+processors:
+  # Batch processor for performance
+  batch:
+    send_batch_size: 1024
+    timeout: 10s
+  
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+  
+  # Attributes processor
+  attributes:
+    actions:
+      - key: environment
+        value: production
+        action: insert
+      - key: cluster
+        value: ceres
+        action: insert
+  
+  # Span processor
+  span:
+    name:
+      to_attributes:
+        rules:
+          - ^/health.*
+          - ^/ready.*
+  
+  # Resource detection
+  resourcedetection:
+    detectors: [gcp, env, docker, host]
+    timeout: 2s
+  
+  # Metrics transform
+  metricstransform:
+    transforms:
+      - include: '.*'
+        action: update
+        new_name: ceres_{{metric_name}}
+
+exporters:
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+  
+  otlp:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  
+  prometheus:
+    endpoint: "0.0.0.0:8888"
+    namespace: ceres
+  
+  logging:
+    loglevel: debug
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, zipkin, jaeger]
+      processors: [memory_limiter, attributes, batch]
+      exporters: [jaeger, otlp, logging]
+    
+    metrics:
+      receivers: [otlp, prometheus, hostmetrics]
+      processors: [memory_limiter, attributes, metricstransform, batch]
+      exporters: [prometheus, logging]
+    
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes, batch]
+      exporters: [logging]
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+  pprof:
+    endpoint: "0.0.0.0:1777"

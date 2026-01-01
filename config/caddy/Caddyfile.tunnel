@@ -1,0 +1,113 @@
+{
+  # Cloudflare Tunnel mode: origin is HTTP (Cloudflare provides public HTTPS).
+  # Caddy should NOT try to obtain ACME certificates here.
+  auto_https off
+}
+
+(auth) {
+  reverse_proxy keycloak:8080 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(nextcloud) {
+  reverse_proxy nextcloud:80 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(gitea) {
+  reverse_proxy gitea:3000 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(mattermost) {
+  reverse_proxy mattermost:8065 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(wiki) {
+  reverse_proxy wikijs:3000 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(taiga) {
+  # Single hostname for Taiga:
+  # - /api/* -> Taiga API
+  # - /events -> Taiga Events (WebSocket)
+  # - everything else -> Taiga Front
+  handle /api/* {
+    reverse_proxy taiga-back:8000 {
+      header_up X-Forwarded-Proto https
+      header_up X-Forwarded-Port 443
+    }
+  }
+
+  handle /events* {
+    reverse_proxy taiga-events:8888 {
+      header_up X-Forwarded-Proto https
+      header_up X-Forwarded-Port 443
+    }
+  }
+
+  reverse_proxy taiga-front:80 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(grafana) {
+  reverse_proxy grafana:3000 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+(edms) {
+  reverse_proxy mayan:8000 {
+    header_up X-Forwarded-Proto https
+    header_up X-Forwarded-Port 443
+  }
+}
+
+# Sites (HTTP origin)
+
+http://auth.{$DOMAIN} {
+  import auth
+}
+
+http://nextcloud.{$DOMAIN} {
+  import nextcloud
+}
+
+http://gitea.{$DOMAIN} {
+  import gitea
+}
+
+http://mattermost.{$DOMAIN} {
+  import mattermost
+}
+
+http://wiki.{$DOMAIN} {
+  import wiki
+}
+
+http://taiga.{$DOMAIN} {
+  import taiga
+}
+
+http://grafana.{$DOMAIN} {
+  import grafana
+}
+
+http://edms.{$DOMAIN} {
+  import edms
+}

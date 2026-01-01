@@ -1,0 +1,92 @@
+# Docker Network Policies for CERES
+# Implements network segmentation using Docker networks
+
+# WARNING: This is a conceptual example. True network policies require:
+# - Docker Swarm mode, or
+# - Kubernetes NetworkPolicies, or
+# - External firewall (iptables, nftables)
+
+version: '3.9'
+
+networks:
+  # DMZ network - external-facing services
+  dmz:
+    name: ceres_dmz
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-ceres-dmz
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+
+  # Core network - database and cache
+  core:
+    name: ceres_core
+    driver: bridge
+    internal: true  # No external access
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-ceres-core
+
+  # Apps network - application services
+  apps:
+    name: ceres_apps
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-ceres-apps
+
+  # Monitoring network - observability stack
+  monitoring:
+    name: ceres_monitoring
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.23.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-ceres-monitoring
+
+  # Management network - admin tools
+  management:
+    name: ceres_management
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-ceres-mgmt
+
+services:
+  # Network policy enforcement via iptables
+  network-policy-enforcer:
+    image: alpine:latest
+    container_name: ceres-network-policy
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./network-policies/enforce.sh:/enforce.sh:ro
+    command: ["/enforce.sh"]
+    restart: unless-stopped
+
+# Network connectivity matrix:
+#
+# Service         | DMZ | Core | Apps | Monitoring | Management
+# ----------------|-----|------|------|------------|------------
+# Caddy (edge)    |  ✓  |  ✗   |  ✓   |     ✗      |     ✗
+# Postgres        |  ✗  |  ✓   |  ✓   |     ✓      |     ✓
+# Redis           |  ✗  |  ✓   |  ✓   |     ✓      |     ✗
+# Keycloak        |  ✓  |  ✓   |  ✓   |     ✗      |     ✗
+# Nextcloud       |  ✗  |  ✓   |  ✓   |     ✗      |     ✗
+# Gitea           |  ✗  |  ✓   |  ✓   |     ✗      |     ✗
+# Mattermost      |  ✗  |  ✓   |  ✓   |     ✗      |     ✗
+# Prometheus      |  ✗  |  ✓   |  ✓   |     ✓      |     ✗
+# Grafana         |  ✓  |  ✗   |  ✗   |     ✓      |     ✗
+# Portainer       |  ✗  |  ✗   |  ✗   |     ✗      |     ✓

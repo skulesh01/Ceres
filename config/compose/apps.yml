@@ -1,0 +1,244 @@
+# CERES Compose Module: apps
+# Purpose: end-user applications (SSO, files, git, chat)
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak@sha256:8e38bc8a4e0606e38a37401422dfbf414e2b73797952dfe94c9b56e2f9207897
+    hostname: keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in config/.env}
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_PORT: 5432
+      KC_DB_URL_DATABASE: ceres_db
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Public (browser) URL is served via edge reverse-proxy (Caddy).
+      # Keep strict=false so Docker-internal callers (e.g. token/userinfo) can still reach http://keycloak:8080.
+      KC_PROXY: edge
+      KC_HOSTNAME: auth.${DOMAIN:-ceres}
+      KC_HOSTNAME_STRICT: "false"
+    # Web access goes through edge reverse-proxy (Caddy)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "cat < /dev/null > /dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.75'
+          memory: 512M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud@sha256:48b5cc1237da4886d0222098b7252316e141bebde37f37268771518d092e7ad4
+    hostname: nextcloud
+    extra_hosts:
+      - "keycloak.lvh.me:host-gateway"
+    environment:
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN:-admin}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:?Set NEXTCLOUD_ADMIN_PASSWORD in config/.env}
+      NEXTCLOUD_TRUSTED_DOMAINS: "nextcloud.${DOMAIN:-ceres},localhost:8082"
+      OVERWRITEHOST: "nextcloud.${DOMAIN:-ceres}"
+      OVERWRITEPROTOCOL: "https"
+      OVERWRITECLIURL: "https://nextcloud.${DOMAIN:-ceres}"
+      TRUSTED_PROXIES: "172.16.0.0/12"
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: nextcloud_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+    volumes:
+      - nextcloud_data:/var/www/html
+      - nextcloud_config:/var/www/html/config
+    # Web access goes through edge reverse-proxy (Caddy)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/status.php"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  gitea:
+    image: gitea/gitea@sha256:534428e78fc00d3ac8647f3467a3f91252acf23a46ea0c872f03191e3c878f7d
+    hostname: gitea
+    environment:
+      GITEA__DATABASE__DB_TYPE: postgres
+      GITEA__DATABASE__HOST: postgres:5432
+      GITEA__DATABASE__NAME: ceres_db
+      GITEA__DATABASE__USER: postgres
+      GITEA__DATABASE__PASSWD: ${POSTGRES_PASSWORD}
+      GITEA__SERVER__DOMAIN: gitea.${DOMAIN:-ceres}
+      GITEA__SERVER__ROOT_URL: https://gitea.${DOMAIN:-ceres}/
+      GITEA__SECURITY__INSTALL_LOCK: "true"
+    volumes:
+      - gitea_data:/data
+    ports:
+      # Keep SSH available for git+ssh from outside (optional).
+      - "2222:22"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  mattermost:
+    image: mattermost/mattermost-team-edition@sha256:08fdd41225790a9592a4d3fcf40869363f611cd06fbdfb1c923eb23db9d6e4aa
+    hostname: mattermost
+    environment:
+      MM_SQLSETTINGS_DATASOURCE: "postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ceres_db?sslmode=disable"
+      MM_SERVICESETTINGS_SITEURL: https://mattermost.${DOMAIN:-ceres}
+    volumes:
+      - mattermost_data:/mattermost/data
+      - mattermost_logs:/mattermost/logs
+      - mattermost_config:/mattermost/config
+    # Web access goes through edge reverse-proxy (Caddy)
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redmine-db-init:
+    image: postgres:16-alpine
+    command: >
+      sh -c '
+      until pg_isready -h postgres -U postgres; do sleep 1; done;
+      PGPASSWORD=$$POSTGRES_PASSWORD psql -h postgres -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = ''redmine_db''" | grep -q 1 || PGPASSWORD=$$POSTGRES_PASSWORD psql -h postgres -U postgres -c "CREATE DATABASE redmine_db ENCODING=''UTF8''";
+      echo "Database ready"
+      '
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
+
+  redmine:
+    image: redmine:5-alpine
+    hostname: redmine
+    environment:
+      REDMINE_DB_POSTGRES: postgres
+      REDMINE_DB_PORT: 5432
+      REDMINE_DB_DATABASE: redmine_db
+      REDMINE_DB_USERNAME: postgres
+      REDMINE_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      REDMINE_SECRET_KEY_BASE: ${REDMINE_SECRET_KEY:-please_change_this_to_a_long_random_string}
+    volumes:
+      - redmine_data:/usr/src/redmine/files
+      - redmine_plugins:/usr/src/redmine/plugins
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redmine-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - internal
+    restart: unless-stopped
+
+  wikijs-db-init:
+    image: postgres@sha256:aa7b1ef595e165f0b780162e3a41edd0a7ed3ea672eb8a0f81615ba725e62bc5
+    command:
+      - sh
+      - -lc
+      - |
+        set -e
+        echo "Ensuring wikijs_db exists..."
+        export PGPASSWORD="${POSTGRES_PASSWORD}"
+        if psql -h postgres -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='wikijs_db'" | grep -q 1; then
+          echo "wikijs_db already exists."
+        else
+          psql -h postgres -U postgres -d postgres -c "CREATE DATABASE wikijs_db;"
+          echo "Created wikijs_db."
+        fi
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
+
+  wikijs:
+    image: ghcr.io/requarks/wiki@sha256:1eaa2de751c2925871a95a02e0ddbdd5c48bf2e016653b2e4a8f0c646cc4ff83
+    hostname: wikijs
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: ${POSTGRES_PASSWORD}
+      DB_NAME: wikijs_db
+    # Web access goes through edge reverse-proxy (Caddy)
+    depends_on:
+      wikijs-db-init:
+        condition: service_completed_successfully
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+volumes:
+  nextcloud_data:
+  nextcloud_config:
+  gitea_data:
+  mattermost_data:
+  mattermost_logs:
+  mattermost_config:
+  redmine_data:
+  redmine_plugins:

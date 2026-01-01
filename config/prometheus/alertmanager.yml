@@ -1,0 +1,110 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: '${SLACK_WEBHOOK_URL}'  # Set this in environment or .env
+
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 30m
+
+    # Warning alerts - delayed notification
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 2h
+
+    # Infrastructure alerts
+    - match:
+        alertname: HighCPUUsage|HighMemoryUsage|DiskSpaceRunningOut
+      receiver: 'infrastructure'
+      group_interval: 5m
+
+    # Database alerts
+    - match:
+        alertname: PostgreSQLDown|PostgreSQLHighConnections
+      receiver: 'database'
+      group_interval: 5m
+
+    # Application alerts
+    - match:
+        alertname: KeycloakDown|TaigaDown|NextcloudDown
+      receiver: 'applications'
+      group_interval: 5m
+
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://alertmanager:9093'
+
+  - name: 'critical-alerts'
+    slack_configs:
+      - channel: '#critical-alerts'
+        title: 'CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+        send_resolved: true
+        actions:
+          - type: button
+            text: 'View Alert'
+            url: '{{ .ExternalURL }}'
+
+  - name: 'warning-alerts'
+    slack_configs:
+      - channel: '#warnings'
+        title: 'WARNING: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+        send_resolved: true
+
+  - name: 'infrastructure'
+    email_configs:
+      - to: 'ops-team@ceres.local'
+        from: 'alertmanager@ceres.local'
+        smarthost: 'smtp.ceres.local:587'
+        auth_username: 'alertmanager'
+        auth_password: '${ALERTMANAGER_SMTP_PASSWORD}'
+        headers:
+          Subject: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+
+  - name: 'database'
+    slack_configs:
+      - channel: '#database'
+        title: 'Database Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+
+  - name: 'applications'
+    slack_configs:
+      - channel: '#applications'
+        title: 'Application Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+
+  # Inhibit if host is down
+  - source_match:
+      alertname: 'InstanceDown'
+    target_match_re:
+      alertname: 'Disk.*|Load.*|Memory.*'
+    equal: ['instance']
+
