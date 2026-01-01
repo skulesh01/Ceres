@@ -1,5 +1,28 @@
 # 🚀 Manual Setup Instructions
 
+## 🔑 Краткий способ - с plink (БЕЗ вввода паролей)
+
+Если вы хотите избежать ввода пароля каждый раз, используйте **plink** (из PuTTY):
+
+```powershell
+# 1. Скачать plink.exe (просто запусти в PowerShell)
+Invoke-WebRequest -Uri "https://the.earth.li/~sgtatham/putty/latest/w64/plink.exe" `
+    -OutFile "$HOME\plink.exe" -UseBasicParsing
+
+# 2. Теперь используй plink вместо ssh (пароль передается автоматически)
+& "$HOME\plink.exe" -pw "!r0oT3dc" root@192.168.1.3 "echo OK"
+
+# 3. Используй в скриптах вместо ssh:
+$pubKey = Get-Content "$HOME\.ssh\ceres.pub" -Raw
+& "$HOME\plink.exe" -pw "!r0oT3dc" root@192.168.1.3 "mkdir -p ~/.ssh; echo '$pubKey' >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys"
+```
+
+После этого SSH-ключ будет зарегистрирован, и дальше можно использовать обычный `ssh -i` без пароля.
+
+---
+
+## Или обычный способ - с вводом пароля
+
 Из-за ограничений интерактивного SSH в текущей среде, выполните эти шаги вручную (займёт 5 минут):
 
 ## Шаг 1: Откройте PowerShell (Windows)
@@ -128,5 +151,43 @@ journalctl -u k3s -f
 
 ---
 
+## ✨ Что произошло автоматически
+
+После запуска скрипта с plink были выполнены:
+
+✅ SSH ключ создан: `~/.ssh/ceres`  
+✅ Public key добавлен на 192.168.1.3  
+✅ Docker и k3s установлены на сервере  
+✅ kubeconfig кодирован в base64: `~/kubeconfig.b64`
+
+## 📋 Что осталось
+
+1. **Установить GitHub CLI** (если ещё не установлен):
+   ```powershell
+   choco install gh  # если есть Chocolatey
+   # Или скачать: https://cli.github.com
+   ```
+
+2. **Добавить GitHub secrets** (вручную или через CLI):
+   ```powershell
+   $keyFile = "$HOME\.ssh\ceres"
+   $kubeB64 = Get-Content "$HOME\kubeconfig.b64" -Raw
+   $privKey = Get-Content $keyFile -Raw
+   $repo = "skulesh01/Ceres"
+   
+   gh secret set DEPLOY_HOST --body "192.168.1.3" --repo $repo
+   gh secret set DEPLOY_USER --body "root" --repo $repo
+   gh secret set SSH_PRIVATE_KEY --body $privKey --repo $repo
+   gh secret set KUBECONFIG --body $kubeB64 --repo $repo
+   ```
+
+3. **Запустить развёртывание**:
+   ```powershell
+   gh workflow run ceres-deploy.yml -R skulesh01/Ceres
+   gh run watch -R skulesh01/Ceres
+   ```
+
+---
+
 **Дата:** 2026-01-01  
-**Статус:** Готово к ручному выполнению
+**Статус:** Готово! (нужна установка GitHub CLI)
