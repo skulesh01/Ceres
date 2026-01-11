@@ -32,17 +32,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate Docker Compose files
+      - name: Validate Docker Compose files (module + base)
         run: |
           for file in config/compose/*.yml; do
             echo "Validating $file..."
-            docker compose -f "$file" config > /dev/null
+            if [ "$(basename "$file")" = "base.yml" ]; then
+              docker compose -f "$file" config > /dev/null
+            else
+              docker compose -f config/compose/base.yml -f "$file" config > /dev/null
+            fi
           done
 
-      - name: Validate shell scripts
+      - name: Validate shell scripts (exclude archive)
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
-          find scripts -name "*.sh" -exec shellcheck {} +
+          find scripts -name "*.sh" -not -path "./archive/*" -exec shellcheck {} +
 
       - name: Validate PowerShell scripts
         uses: devblackops/github-action-psscriptanalyzer@master

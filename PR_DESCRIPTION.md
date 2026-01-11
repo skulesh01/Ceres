@@ -1,75 +1,75 @@
-# 🔐 Security: Remove All Hardcoded Secrets
+# 🔐 Безопасность: удаление всех жёстко прописанных секретов
 
-## Summary
-This PR removes all hardcoded passwords, credentials, and sensitive IP addresses from the codebase, replacing them with environment variables for secure configuration management.
+## Кратко
+Этот PR удаляет все жёстко прописанные пароли, учётные данные и чувствительные IP-адреса из кода, заменяя их переменными окружения для безопасного управления конфигурацией.
 
-## Changes
+## Изменения
 
-### 🔒 Security Improvements
-- ✅ Removed all hardcoded passwords (`!r0oT3dc`, etc.)
-- ✅ Removed all hardcoded IPs (`192.168.1.3`, `192.168.1.10`, etc.)
-- ✅ Replaced with environment variables (`$env:DEPLOY_SERVER_PASSWORD`, etc.)
-- ✅ Created `.env.example` template for secure configuration
-- ✅ Added comprehensive security guide ([SECURITY_SETUP.md](../SECURITY_SETUP.md))
-- ✅ Created `Load-Env.ps1` helper for environment loading
-- ✅ Deleted temporary scripts with exposed credentials
+### 🔒 Улучшения безопасности
+- ✅ Удалены все хардкоденные пароли (`!r0oT3dc`, и т.п.)
+- ✅ Удалены все хардкоденные IP-адреса (`192.168.1.3`, `192.168.1.10`, и т.п.)
+- ✅ Заменены на переменные окружения (`$env:DEPLOY_SERVER_PASSWORD`, и др.)
+- ✅ Добавлен шаблон `.env.example` для безопасной конфигурации
+- ✅ Добавлено подробное руководство по безопасности ([SECURITY_SETUP.md](SECURITY_SETUP.md))
+- ✅ Добавлен хелпер `Load-Env.ps1` для загрузки переменных окружения
+- ✅ Удалены временные скрипты с утечкой секретов
 
-### 📝 Files Modified
-- `DEPLOY.ps1` - Environment variables instead of hardcoded values
-- `auto-deploy.ps1` - Environment variables for SSH credentials
-- `flux-status.ps1` - Environment variables for server access
-- `check-status.ps1` - Environment variables for authentication
-- `README.md` - Added security notice at the top
+### 📝 Изменённые файлы
+- `DEPLOY.ps1` — вместо хардкодов используются переменные окружения
+- `auto-deploy.ps1` — переменные окружения для SSH
+- `flux-status.ps1` — переменные окружения для доступа к серверу
+- `check-status.ps1` — переменные окружения для аутентификации
+- `README.md` — добавлено предупреждение о безопасности в начале
 
-### 🗑️ Files Removed
-- `setup-ssh.ps1` - Had hardcoded password
-- `setup-ssh-key.sh` - Had hardcoded password
-- `status.bat` - Had hardcoded password
-- `deploy-flux.ps1` - Temporary file with secrets
-- `deploy-flux-releases.ps1` - Temporary file with secrets
-- `quick-deploy.ps1` - Temporary file with secrets
-- And several other temporary test scripts
+### 🗑️ Удалённые файлы
+- `setup-ssh.ps1` — содержал хардкод пароля
+- `setup-ssh-key.sh` — содержал хардкод пароля
+- `status.bat` — содержал хардкод пароля
+- `deploy-flux.ps1` — временный файл с секретами
+- `deploy-flux-releases.ps1` — временный файл с секретами
+- `quick-deploy.ps1` — временный файл с секретами
+- И ряд других временных тестовых скриптов
 
-### 📁 New Files
-- `.env.example` - Template for secure configuration
-- `SECURITY_SETUP.md` - Complete security setup guide
-- `scripts/_lib/Load-Env.ps1` - Helper to load environment variables
+### 📁 Новые файлы
+- `.env.example` — шаблон безопасной конфигурации
+- `SECURITY_SETUP.md` — полное руководство по настройке безопасности
+- `scripts/_lib/Load-Env.ps1` — хелпер для загрузки переменных окружения
 
-### 📦 Archived Files
-- Moved legacy docs to `archive/docs/`
-- Moved legacy K8s manifests to `archive/legacy-k8s/`
-- Moved deprecated scripts to `archive/scripts/`
+### 📦 Архивированные файлы
+- Перенесены устаревшие документы в `archive/docs/`
+- Перенесены устаревшие манифесты K8s в `archive/legacy-k8s/`
+- Перенесены deprecated-скрипты в `archive/scripts/`
 
-## Breaking Changes
+## Ломающие изменения
 
-⚠️ **Users must now create `.env` file before running scripts:**
+⚠️ **Перед запуском скриптов теперь необходимо создать файл `.env`:**
 
 ```powershell
-# 1. Copy template
+# 1. Скопируйте шаблон
 Copy-Item .env.example .env
 
-# 2. Edit with your values
+# 2. Отредактируйте, заполнив свои значения
 notepad .env
 
-# 3. Load environment
+# 3. Загрузите переменные окружения
 . .\scripts\_lib\Load-Env.ps1
 
-# 4. Run deployment
+# 4. Запустите деплой
 .\DEPLOY.ps1
 ```
 
-## Migration Guide
+## Руководство по миграции
 
-### For Existing Users
+### Для существующих пользователей
 
-If you have existing deployments with hardcoded values:
+Если у вас есть существующие установки с хардкодами:
 
-1. **Create `.env` file:**
+1. **Создайте файл `.env`:**
    ```powershell
    Copy-Item .env.example .env
    ```
 
-2. **Fill in your actual values:**
+2. **Заполните фактические значения:**
    ```env
    DEPLOY_SERVER_IP=192.168.1.3
    DEPLOY_SERVER_USER=root
@@ -78,7 +78,7 @@ If you have existing deployments with hardcoded values:
    # ... etc
    ```
 
-3. **Update scripts to load environment:**
+3. **Обновите сессию/скрипты, чтобы загрузить переменные окружения:**
    ```powershell
    # At the start of your session
    . .\scripts\_lib\Load-Env.ps1
@@ -87,53 +87,53 @@ If you have existing deployments with hardcoded values:
    .\DEPLOY.ps1
    ```
 
-### For New Users
+### Для новых пользователей
 
-Follow the complete guide in [SECURITY_SETUP.md](../SECURITY_SETUP.md)
+Следуйте полному руководству в [SECURITY_SETUP.md](SECURITY_SETUP.md)
 
-## Testing
+## Тестирование
 
-✅ Tested locally:
-- Environment variables load correctly via `Load-Env.ps1`
-- Scripts fail gracefully if `.env` not found
-- Deployment works with environment-sourced credentials
-- No secrets exposed in git history (new branch)
+✅ Протестировано локально:
+- Переменные окружения корректно загружаются через `Load-Env.ps1`
+- Скрипты корректно завершаются с предупреждением, если `.env` отсутствует
+- Деплой работает с кредами из переменных окружения
+- В истории git нет секретов (новая ветка)
 
-## Security Benefits
+## Преимущества по безопасности
 
-- 🔒 **No credentials in git history** - Fresh branch without exposure
-- 🔐 **Secrets in .env only** - Already in `.gitignore`
-- 📖 **Clear documentation** - Security best practices guide
-- ✅ **Easy rotation** - Change `.env` file, no code changes needed
-- 🚫 **Fail-safe** - Scripts check for required variables
+- 🔒 **Отсутствие секретов в истории git** — новая ветка без утечек
+- 🔐 **Секреты только в `.env`** — уже в `.gitignore`
+- 📖 **Чёткая документация** — руководство по лучшим практикам безопасности
+- ✅ **Лёгкая ротация** — меняйте `.env`, без правок кода
+- 🚫 **Fail-safe** — скрипты проверяют обязательные переменные
 
-## Checklist
+## Чек-лист
 
-- [x] All hardcoded passwords removed
-- [x] All hardcoded IPs removed
-- [x] `.env.example` created with all variables
-- [x] Security documentation written
-- [x] Helper script for loading env vars
-- [x] README updated with security notice
-- [x] Temporary files cleaned up
-- [x] Legacy files archived
-- [x] `.gitignore` verified
-- [x] Local testing completed
+- [x] Удалены все хардкоденные пароли
+- [x] Удалены все хардкоденные IP
+- [x] Создан `.env.example` со всеми переменными
+- [x] Написана документация по безопасности
+- [x] Добавлен хелпер для загрузки переменных окружения
+- [x] README дополнён предупреждением о безопасности
+- [x] Удалены временные файлы
+- [x] Устаревшие файлы перенесены в архив
+- [x] Проверен `.gitignore`
+- [x] Локальные тесты выполнены
 
 ## Post-Merge TODO
 
-After merging, users should:
-1. Read [SECURITY_SETUP.md](../SECURITY_SETUP.md)
-2. Create their `.env` file
-3. Test deployment in safe environment
-4. Update any CI/CD secrets
+После мержа пользователям следует:
+1. Прочитать [SECURITY_SETUP.md](SECURITY_SETUP.md)
+2. Создать свой файл `.env`
+3. Протестировать деплой в безопасной среде
+4. Обновить все CI/CD секреты
 
-## Related Issues
+## Связанные вопросы
 
-This PR addresses security concerns about exposed credentials in the public repository.
+Этот PR устраняет проблемы безопасности, связанные с утечкой учётных данных в публичном репозитории.
 
 ---
 
-**Review Priority:** HIGH - Security-critical changes
+**Приоритет ревью:** ВЫСОКИЙ — критичные изменения по безопасности
 
 cc @skulesh01

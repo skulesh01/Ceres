@@ -14,21 +14,21 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Check shell scripts
+    - name: Check shell scripts (exclude archive)
       run: |
         sudo apt-get update
         sudo apt-get install -y shellcheck
-        find . -name "*.sh" -type f -exec shellcheck {} \;
+        find . -name "*.sh" -type f -not -path "./archive/*" -exec shellcheck {} \;
     
-    - name: Check YAML files
+    - name: Check YAML files (exclude archive)
       run: |
         pip install yamllint
-        find . -name "*.yml" -o -name "*.yaml" | xargs yamllint -d relaxed
+        find . \( -name "*.yml" -o -name "*.yaml" \) -not -path "./archive/*" | xargs yamllint -d relaxed
     
-    - name: Check Markdown files
+    - name: Check Markdown files (respect ignore file)
       uses: docker://avtodev/markdown-lint:v1
       with:
-        args: '**/*.md'
+        args: '**/*.md --ignore-path .markdownlintignore'
 
   security-scan:
     name: Security Scan
@@ -58,11 +58,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Validate docker-compose files
+    - name: Validate docker-compose files (module + base)
       run: |
         for file in config/compose/*.yml; do
           echo "Validating $file..."
-          docker compose -f "$file" config > /dev/null
+          if [ "$(basename "$file")" = "base.yml" ]; then
+            docker compose -f "$file" config > /dev/null
+          else
+            docker compose -f config/compose/base.yml -f "$file" config > /dev/null
+          fi
         done
     
     - name: Check for secrets in code
@@ -85,20 +89,20 @@ jobs:
         cp config/.env.example config/.env
         sed -i 's/CHANGE_ME/test_password_123/g' config/.env
     
-    - name: Start core services
+    - name: Start core services (base + core)
       run: |
-        # Запускаем только базовые сервисы для теста
-        docker compose -f config/compose/base.yml up -d
+        # Запускаем базу + core для теста
+        docker compose -f config/compose/base.yml -f config/compose/core.yml up -d
         sleep 30
     
     - name: Check services health
       run: |
-        docker compose -f config/compose/base.yml ps
+        docker compose -f config/compose/base.yml -f config/compose/core.yml ps
         # Проверяем что PostgreSQL и Redis живы
-        docker compose -f config/compose/base.yml exec -T postgres pg_isready || exit 1
-        docker compose -f config/compose/base.yml exec -T redis redis-cli ping || exit 1
+        docker compose -f config/compose/base.yml -f config/compose/core.yml exec -T postgres pg_isready || exit 1
+        docker compose -f config/compose/base.yml -f config/compose/core.yml exec -T redis redis-cli ping || exit 1
     
     - name: Cleanup
       if: always()
       run: |
-        docker compose -f config/compose/base.yml down -v
+        docker compose -f config/compose/base.yml -f config/compose/core.yml down -v
