@@ -1,0 +1,178 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webhook-listener-code
+  namespace: mail-vpn
+data:
+  app.py: |
+    #!/usr/bin/env python3
+    import json, os, re, smtplib, subprocess
+    from email.mime.application import MIMEApplication
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from flask import Flask, request, jsonify
+
+    app = Flask(__name__)
+    WG_SERVER_IP = os.getenv("WG_SERVER_IP", "192.168.1.3")
+    WG_SERVER_PORT = os.getenv("WG_SERVER_PORT", "51820")
+    WG_INTERFACE = os.getenv("WG_INTERFACE", "wg0")
+    WG_CIDR = os.getenv("WG_CIDR", "10.8.0.0/24")
+    SMTP_HOST = os.getenv("SMTP_HOST", "postfix")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))
+    SMTP_FROM = os.getenv("SMTP_FROM", "admin@ceres.local")
+    SECRET_TOKEN = os.getenv("WEBHOOK_TOKEN", "")
+
+    def _run(cmd):
+        return subprocess.check_output(cmd, shell=True, text=True).strip()
+
+    def _next_ip():
+        try:
+            output = _run(f"wg show {WG_INTERFACE} allowed-ips")
+            matches = re.findall(r"(10\.8\.0\.)(\d+)", output)
+            last = max(int(m[1]) for m in matches) if matches else 1
+            return f"10.8.0.{last+1}"
+        except:
+            return "10.8.0.10"
+
+    def _generate_keys():
+        priv = _run("wg genkey")
+        pub = _run(f"echo {priv} | wg pubkey")
+        return priv, pub
+
+    def _server_pub():
+        return _run(f"wg show {WG_INTERFACE} public-key")
+
+    def _add_peer(pubkey, client_ip):
+        _run(f"wg set {WG_INTERFACE} peer {pubkey} allowed-ips {client_ip}/32")
+        try:
+            _run(f"wg-quick save {WG_INTERFACE}")
+        except:
+            pass
+
+    def _send_email(email_to, username, conf_text):
+        msg = MIMEMultipart()
+        msg["From"] = SMTP_FROM
+        msg["To"] = email_to
+        msg["Subject"] = "Ваш VPN доступ (WireGuard)"
+        body = f"Здравствуйте, {username}!\n\nВам выдан доступ в корпоративный VPN Ceres.\nФайл конфигурации во вложении: {username}.conf\n\nИнструкция:\n1) Установите WireGuard (https://www.wireguard.com/install/)\n2) Импортируйте файл {username}.conf\n3) Включите подключение\n\nЕсли возникнут вопросы — обратитесь к администратору."
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        attachment = MIMEApplication(conf_text.encode("utf-8"), _subtype="conf")
+        attachment.add_header('Content-Disposition', 'attachment', filename=f"{username}.conf")
+        msg.attach(attachment)
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+            smtp.sendmail(SMTP_FROM, [email_to], msg.as_string())
+
+    @app.route('/webhook/keycloak', methods=['POST'])
+    def keycloak_webhook():
+        if SECRET_TOKEN and request.headers.get("X-Webhook-Token") != SECRET_TOKEN:
+            return jsonify({'status': 'forbidden'}), 403
+        data = request.get_json(force=True, silent=True) or {}
+        username = data.get('username')
+        email = data.get('email')
+        if not username or not email:
+            return jsonify({'status': 'error', 'reason': 'missing username/email'}), 400
+        try:
+            priv, pub = _generate_keys()
+            client_ip = _next_ip()
+            server_pub = _server_pub()
+            conf = f"[Interface]\nPrivateKey = {priv}\nAddress = {client_ip}/24\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = {server_pub}\nEndpoint = {WG_SERVER_IP}:{WG_SERVER_PORT}\nAllowedIPs = {WG_CIDR}\nPersistentKeepalive = 25"
+            _add_peer(pub, client_ip)
+            _send_email(email, username, conf)
+            return jsonify({'status': 'success', 'username': username, 'ip': client_ip}), 200
+        except Exception as e:
+            print(f"Error: {e}")
+            return jsonify({'status': 'error', 'reason': str(e)}), 500
+
+    @app.route('/health', methods=['GET'])
+    def health():
+        return jsonify({'status': 'healthy'}), 200
+
+    if __name__ == '__main__':
+        app.run(host='0.0.0.0', port=5000)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-listener
+  namespace: mail-vpn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-listener
+  template:
+    metadata:
+      labels:
+        app: webhook-listener
+    spec:
+      hostNetwork: true
+      containers:
+      - name: webhook
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - NET_ADMIN
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -e
+            apt-get update -qq && apt-get install -y --no-install-recommends wireguard-tools iproute2 && rm -rf /var/lib/apt/lists/*
+            pip install --no-cache-dir flask
+            python /app/app.py
+        env:
+        - name: WG_SERVER_IP
+          value: "192.168.1.3"
+        - name: WG_SERVER_PORT
+          value: "51820"
+        - name: WG_INTERFACE
+          value: "wg0"
+        - name: WG_CIDR
+          value: "10.8.0.0/24"
+        - name: SMTP_HOST
+          value: "10.43.28.213"
+        - name: SMTP_PORT
+          value: "25"
+        - name: SMTP_FROM
+          value: "admin@ceres.local"
+        - name: WEBHOOK_TOKEN
+          value: "change-me"
+        ports:
+        - containerPort: 5000
+          name: http
+        volumeMounts:
+        - name: code
+          mountPath: /app
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 15
+      volumes:
+      - name: code
+        configMap:
+          name: webhook-listener-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-listener
+  namespace: mail-vpn
+spec:
+  type: NodePort
+  ports:
+  - port: 5000
+    targetPort: 5000
+    nodePort: 30500
+    protocol: TCP
+  selector:
+    app: webhook-listener

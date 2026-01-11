@@ -437,16 +437,48 @@ function Get-CeresComposeFiles {
         }
         
         $files.Add("-f")
-        $files.Add($moduleMap[$normalizedModule])
-        Write-Verbose "Added module: $normalizedModule"
-    }
+#endregion
 
-    return $files.ToArray()
+#region Remote SSH Operations
+
+<#
+.SYNOPSIS
+    Executes command on remote host via SSH with cached password
+.DESCRIPTION
+    Maintains password cache for SSH session to avoid repeated password prompts.
+.PARAMETER Host
+    SSH host (user@hostname)
+.PARAMETER Command
+    Command to execute on remote host
+.PARAMETER Password
+    Optional password
+#>
+function Invoke-RemoteCommand {
+    param(
+        [string]$Host,
+        [string]$Command,
+        [string]$Password
+    )
+    
+    if ($Password) {
+        $script:CachedSSHPassword = $Password
+    }
+    
+    $pass = $script:CachedSSHPassword
+    echo $pass | ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $Host $Command 2>&1
+}
+
+function Set-RemoteSSHCredentials {
+    param(
+        [string]$Host,
+        [string]$Password
+    )
+    $script:CachedSSHPassword = $Password
+    Write-Host "SSH credentials cached for $Host"
 }
 
 #endregion
 
-# Export module members (PowerShell 5.1 compatible)
 Export-ModuleMember -Function @(
     'Get-CeresConfigDir',
     'Read-DotEnvFile',
@@ -454,5 +486,7 @@ Export-ModuleMember -Function @(
     'New-SecureSecret',
     'New-UrlSafeSecret',
     'Initialize-CeresEnv',
-    'Get-CeresComposeFiles'
+    'Get-CeresComposeFiles',
+    'Invoke-RemoteCommand',
+    'Set-RemoteSSHCredentials'
 )

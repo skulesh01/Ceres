@@ -11,69 +11,18 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/yourusername/ceres
+  url: https://github.com/skulesh01/Ceres
   ref:
     branch: main
-  secretRef:
-    name: ceres-git-auth
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: ceres-infrastructure
+  name: ceres-releases
   namespace: flux-system
 spec:
-  interval: 10m
-  path: ./flux/infrastructure
-  prune: true
-  sourceRef:
-    kind: GitRepository
-    name: ceres
-  healthChecks:
-    - apiVersion: v1
-      kind: Namespace
-      name: ceres-system
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: ceres-core
-  namespace: flux-system
-spec:
-  dependsOn:
-    - name: ceres-infrastructure
   interval: 5m
-  path: ./flux/apps/core
-  prune: true
-  sourceRef:
-    kind: GitRepository
-    name: ceres
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: ceres-apps
-  namespace: flux-system
-spec:
-  dependsOn:
-    - name: ceres-core
-  interval: 5m
-  path: ./flux/apps/applications
-  prune: true
-  sourceRef:
-    kind: GitRepository
-    name: ceres
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: ceres-monitoring
-  namespace: flux-system
-spec:
-  dependsOn:
-    - name: ceres-infrastructure
-  interval: 5m
-  path: ./flux/apps/monitoring
+  path: ./config/flux
   prune: true
   sourceRef:
     kind: GitRepository

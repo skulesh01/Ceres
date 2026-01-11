@@ -90,6 +90,16 @@
   reverse_proxy mayan:8000
 }
 
+(mail) {
+  tls internal
+  reverse_proxy mailu-front:80
+}
+
+(vpn) {
+  tls internal
+  reverse_proxy wg-easy:51821
+}
+
 # Sites
 
 auth.{$DOMAIN} {
@@ -122,6 +132,14 @@ grafana.{$DOMAIN} {
 
 edms.{$DOMAIN} {
   import edms
+}
+
+mail.{$DOMAIN} {
+  import mail
+}
+
+vpn.{$DOMAIN} {
+  import vpn
 }
 
 # Optional / admin sites

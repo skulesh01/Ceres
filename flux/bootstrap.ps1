@@ -1,8 +1,8 @@
 # FluxCD Bootstrap Script for CERES (PowerShell)
 
 param(
-    [string]$GitHubUser = "yourusername",
-    [string]$GitHubRepo = "ceres",
+    [string]$GitHubUser = "skulesh01",
+    [string]$GitHubRepo = "Ceres",
     [string]$ClusterName = "production"
 )
 
@@ -49,9 +49,9 @@ kubectl wait --for=condition=ready --timeout=5m `
 
 # Create namespace
 Write-Host "✓ Creating CERES namespace..." -ForegroundColor Green
-kubectl create namespace ceres-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace ceres --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl label namespace ceres-system `
+kubectl label namespace ceres `
     monitoring=enabled `
     --overwrite
 

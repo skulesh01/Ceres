@@ -1,0 +1,154 @@
+# CERES Compose Module: mail
+# Purpose: Full-featured email server with web admin UI and webmail
+# Stack: Mailu (SMTP, IMAP, Webmail, Admin UI)
+
+services:
+  # Mailu Admin UI - управление доменами и почтовыми ящиками
+  mailu-admin:
+    image: ghcr.io/mailu/admin:2024.06
+    hostname: mailu-admin
+    environment:
+      # Core settings
+      SECRET_KEY: ${MAILU_SECRET_KEY:-ChangeThisSecretKey123456789012}
+      DOMAIN: ${MAIL_DOMAIN:-ceres.local}
+      HOSTNAMES: mail.${DOMAIN:-ceres.local}
+      
+      # Database
+      DB_FLAVOR: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${MAILU_DB_NAME:-mailu}
+      DB_USER: ${MAILU_DB_USER:-mailu}
+      DB_PW: ${MAILU_DB_PASSWORD:-mailu_secure_pass}
+      
+      # Admin account
+      INITIAL_ADMIN_ACCOUNT: admin
+      INITIAL_ADMIN_DOMAIN: ${MAIL_DOMAIN:-ceres.local}
+      INITIAL_ADMIN_PW: ${MAILU_ADMIN_PASSWORD:-admin123}
+      
+      # Webmail enabled
+      WEBMAIL: roundcube
+      
+      # Disable features we don't need
+      ANTIVIRUS: none
+      FETCHMAIL_ENABLED: "false"
+      
+      # Logging
+      LOG_LEVEL: INFO
+      
+    volumes:
+      - mailu_admin_data:/data
+      - mailu_dkim:/dkim
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Mailu Front - reverse proxy и mail gateway
+  mailu-front:
+    image: ghcr.io/mailu/nginx:2024.06
+    hostname: mailu-front
+    environment:
+      LOG_LEVEL: INFO
+      TLS_FLAVOR: notls  # Caddy handles TLS
+      ADMIN: "true"
+      WEBMAIL: roundcube
+      WEBDAV: none
+      MESSAGE_SIZE_LIMIT: 50000000
+    ports:
+      - "127.0.0.1:25:25"     # SMTP (localhost only)
+      - "127.0.0.1:465:465"   # SMTPS
+      - "127.0.0.1:587:587"   # Submission
+      - "127.0.0.1:143:143"   # IMAP
+      - "127.0.0.1:993:993"   # IMAPS
+      - "127.0.0.1:8080:80"   # Web UI (reverse proxy via Caddy)
+    volumes:
+      - mailu_certs:/certs
+      - mailu_overrides:/overrides:ro
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Mailu SMTP Server (Postfix)
+  mailu-smtp:
+    image: ghcr.io/mailu/postfix:2024.06
+    hostname: mailu-smtp
+    environment:
+      LOG_LEVEL: INFO
+      MESSAGE_SIZE_LIMIT: 50000000
+      RELAYHOST: ""
+      FETCHMAIL_ENABLED: "false"
+    volumes:
+      - mailu_mailqueue:/queue
+      - mailu_overrides:/overrides:ro
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Mailu IMAP Server (Dovecot)
+  mailu-imap:
+    image: ghcr.io/mailu/dovecot:2024.06
+    hostname: mailu-imap
+    environment:
+      LOG_LEVEL: INFO
+      COMPRESSION: lz4
+      COMPRESSION_LEVEL: 6
+    volumes:
+      - mailu_mail:/mail
+      - mailu_overrides:/overrides:ro
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Roundcube Webmail - веб-интерфейс для чтения почты
+  mailu-webmail:
+    image: ghcr.io/mailu/roundcube:2024.06
+    hostname: mailu-webmail
+    environment:
+      LOG_LEVEL: INFO
+      SECRET_KEY: ${MAILU_SECRET_KEY:-ChangeThisSecretKey123456789012}
+      
+      # Database
+      DB_FLAVOR: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${MAILU_WEBMAIL_DB_NAME:-roundcube}
+      DB_USER: ${MAILU_DB_USER:-mailu}
+      DB_PW: ${MAILU_DB_PASSWORD:-mailu_secure_pass}
+    volumes:
+      - mailu_webmail_data:/data
+      - mailu_overrides:/overrides:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailu-imap:
+        condition: service_started
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Redis для Mailu (rate limiting и кэш)
+  mailu-redis:
+    image: redis:7-alpine
+    hostname: mailu-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - mailu_redis_data:/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+networks:
+
+volumes:
+  mailu_admin_data:
+  mailu_dkim:
+  mailu_certs:
+  mailu_overrides:
+  mailu_mailqueue:
+  mailu_mail:
+  mailu_webmail_data:
+  mailu_redis_data:
+

@@ -1,24 +1,14 @@
----
-# Flux CD GitOps Stack for CERES v2.8.0
-# Alternative to ArgoCD - Git-driven continuous delivery
-# Features: Multi-tenancy, cross-cluster management, policy enforcement (Kyverno)
-apiVersion: source.toolkit.fluxcd.io/v1beta2
+# Git Repository for CERES Helm charts
+apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
   name: ceres-helm-charts
   namespace: flux-system
 spec:
   interval: 5m
-  url: https://github.com/ceres-platform/ceres-helm-charts
+  url: https://github.com/skulesh01/Ceres
   ref:
     branch: main
-  secretRef:
-    name: flux-github-ssh
-  # Verify GPG signature for security
-  verification:
-    mode: enable
-    secretRef:
-      name: flux-gpg-key
 ---
 # Helm Repository for external charts (bitnami, prometheus, etc.)
 apiVersion: source.toolkit.fluxcd.io/v1beta2
@@ -28,7 +18,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m
-  url: https://charts.bitnami.com/bitnami
+  url: https://raw.githubusercontent.com/bitnami/charts/main/bitnami
 ---
 apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: HelmRepository
@@ -39,32 +29,8 @@ spec:
   interval: 5m
   url: https://prometheus-community.github.io/helm-charts
 ---
-# Kustomization for base CERES infrastructure
-apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
-kind: Kustomization
-metadata:
-  name: ceres-base
-  namespace: flux-system
-spec:
-  interval: 10m
-  sourceRef:
-    kind: GitRepository
-    name: ceres-helm-charts
-  path: ./kustomize/base
-  prune: true
-  wait: true
-  timeout: 5m
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-age
-  postBuild:
-    substituteFrom:
-      - kind: ConfigMap
-        name: cluster-config
----
 # Helm Release for CERES core services
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: ceres
@@ -92,23 +58,9 @@ spec:
     remediation:
       retries: 3
       remediateLastFailure: true
-  # Automatic image updates with SemVer
-  postRenderers:
-    - kustomize:
-        patchesStrategicMerge:
-          - apiVersion: apps/v1
-            kind: Deployment
-            metadata:
-              name: ceres
-            spec:
-              template:
-                spec:
-                  containers:
-                    - name: ceres
-                      imagePullPolicy: Always
 ---
 # Helm Release for PostgreSQL
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: postgresql
@@ -139,77 +91,6 @@ spec:
       serviceMonitor:
         enabled: true
 ---
-# Helm Release for Redis
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
-kind: HelmRelease
-metadata:
-  name: redis
-  namespace: ceres
-spec:
-  interval: 5m
-  chart:
-    spec:
-      chart: redis
-      sourceRef:
-        kind: HelmRepository
-        name: bitnami
-      version: "17.0.x"
-  values:
-    auth:
-      enabled: true
-      existingSecret: redis-credentials
-    master:
-      persistence:
-        enabled: true
-        size: 50Gi
-        storageClassName: ceres-cache
-    replica:
-      replicaCount: 2
-    metrics:
-      enabled: true
-      serviceMonitor:
-        enabled: true
----
-# Notification Provider for Slack
-apiVersion: notification.toolkit.fluxcd.io/v1beta2
-kind: Provider
-metadata:
-  name: slack
-  namespace: flux-system
-spec:
-  type: slack
-  address: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
----
-# Alert for deployment failures
-apiVersion: notification.toolkit.fluxcd.io/v1beta2
-kind: Alert
-metadata:
-  name: ceres-deployment-failure
-  namespace: flux-system
-spec:
-  providerRef:
-    name: slack
-  eventSeverity: error
-  eventSources:
-    - kind: HelmRelease
-      name: '*'
----
-# Image Policy for automatic updates
-apiVersion: image.toolkit.fluxcd.io/v1beta1
-kind: ImageRepository
-metadata:
-  name: ceres-registry
-  namespace: flux-system
-spec:
-  image: ceres-platform/ceres
-  interval: 1m
-  secretRef:
-    name: docker-registry-credentials
----
-# Image Policy - automatic patch version updates
-apiVersion: image.toolkit.fluxcd.io/v1beta1
-kind: ImagePolicy
-metadata:
   name: ceres-image-policy
   namespace: flux-system
 spec:

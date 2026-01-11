@@ -1,0 +1,498 @@
+---
+# CERES на Kubernetes - основные сервисы
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ceres
+  labels:
+    name: ceres
+
+---
+# Secrets для переменных окружения
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ceres-secrets
+  namespace: ceres
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: ceres_postgres_2024!
+  POSTGRES_DB: ceres_db
+  POSTGRES_USER: postgres
+  KEYCLOAK_ADMIN: admin
+  KEYCLOAK_ADMIN_PASSWORD: admin_password_2024!
+  REDIS_PASSWORD: redis_password_2024!
+  NEXTCLOUD_ADMIN: admin
+  NEXTCLOUD_ADMIN_PASSWORD: nextcloud_2024!
+  DOMAIN: ceres.local
+
+---
+# PersistentVolume для PostgreSQL
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/postgres
+
+---
+# PersistentVolume для Redis
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/redis
+
+---
+# PersistentVolume для Nextcloud
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nextcloud-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/nextcloud
+
+---
+# PersistentVolumeClaim для PostgreSQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: postgres-pv
+
+---
+# PersistentVolumeClaim для Redis
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: redis-pv
+
+---
+# PersistentVolumeClaim для Nextcloud
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  volumeName: nextcloud-pv
+
+---
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ceres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+  type: ClusterIP
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+        - redis-server
+        - "--appendonly"
+        - "yes"
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ceres
+spec:
+  selector:
+    app: redis
+  ports:
+  - protocol: TCP
+    port: 6379
+    targetPort: 6379
+  type: ClusterIP
+
+---
+# Keycloak Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+      - name: keycloak
+        image: quay.io/keycloak/keycloak:24
+        command:
+        - /opt/keycloak/bin/kc.sh
+        - start-dev
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KEYCLOAK_ADMIN
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: KEYCLOAK_ADMIN
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: KEYCLOAK_ADMIN_PASSWORD
+        - name: KC_DB
+          value: postgres
+        - name: KC_DB_URL_HOST
+          value: postgres
+        - name: KC_DB_URL_PORT
+          value: "5432"
+        - name: KC_DB_URL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_DB
+        - name: KC_DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_USER
+        - name: KC_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_PASSWORD
+        - name: KC_PROXY
+          value: edge
+        - name: KC_HOSTNAME
+          value: auth.ceres.local
+        - name: KC_HOSTNAME_STRICT
+          value: "false"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+
+---
+# Keycloak Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: ceres
+spec:
+  selector:
+    app: keycloak
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# Nextcloud Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      containers:
+      - name: nextcloud
+        image: nextcloud:27-apache
+        ports:
+        - containerPort: 80
+        env:
+        - name: NEXTCLOUD_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: NEXTCLOUD_ADMIN
+        - name: NEXTCLOUD_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: NEXTCLOUD_ADMIN_PASSWORD
+        - name: NEXTCLOUD_TRUSTED_DOMAINS
+          value: "nextcloud.ceres.local localhost"
+        - name: OVERWRITEHOST
+          value: "nextcloud.ceres.local"
+        - name: OVERWRITEPROTOCOL
+          value: "https"
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_DB
+          value: nextcloud_db
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_HOST
+          value: redis
+        volumeMounts:
+        - name: nextcloud-storage
+          mountPath: /var/www/html
+        livenessProbe:
+          httpGet:
+            path: /status.php
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /status.php
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+      volumes:
+      - name: nextcloud-storage
+        persistentVolumeClaim:
+          claimName: nextcloud-pvc
+
+---
+# Nextcloud Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: ceres
+spec:
+  selector:
+    app: nextcloud
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+
+---
+# Ingress для всех сервисов
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ceres-ingress
+  namespace: ceres
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: auth.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 8080
+  - host: nextcloud.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud
+            port:
+              number: 80
+  - host: ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud
+            port:
+              number: 80

@@ -1,0 +1,656 @@
+---
+# ==================== NAMESPACE ====================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ceres
+
+---
+# ==================== CONFIGMAP ====================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ceres-config
+  namespace: ceres
+data:
+  POSTGRES_PASSWORD: ceres123
+  POSTGRES_USER: postgres
+  POSTGRES_DB: ceres
+  KEYCLOAK_ADMIN: admin
+  KEYCLOAK_ADMIN_PASSWORD: admin123
+  KEYCLOAK_DB_VENDOR: postgres
+  KEYCLOAK_DB_ADDR: postgres
+  KEYCLOAK_DB_PORT: "5432"
+  KEYCLOAK_DB_DATABASE: ceres
+  KEYCLOAK_DB_USER: postgres
+  KEYCLOAK_DB_PASSWORD: ceres123
+  REDIS_PASSWORD: redis123
+  SMTP_HOST: postfix
+  SMTP_PORT: "25"
+  SMTP_FROM: ceres@company.local
+
+---
+# ==================== POSTFIX CONFIGMAP ====================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postfix-config
+  namespace: ceres
+data:
+  main.cf: |
+    # Postfix конфигурация для CERES
+    myhostname = ceres.company.local
+    mydomain = company.local
+    myorigin = $mydomain
+    mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
+    inet_interfaces = all
+    inet_protocols = ipv4
+    mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    
+    # Доставка писем локально
+    default_transport = smtp
+    relay_domains = $mydestination
+    
+    # Максимум писем на процесс
+    default_process_limit = 10
+    smtp_connection_cache_on_demand = no
+  
+  master.cf: |
+    # Postfix master process configuration file (частичный конфиг)
+    smtp      inet  n       -       y       -       -       smtpd
+    10025     inet  n       -       y       -       -       smtpd
+    pickup    unix  n       -       y       60      1       pickup
+    cleanup   unix  n       -       y       -       0       cleanup
+    qmgr      unix  n       -       n       300     1       qmgr
+    tlsmgr    unix  -       -       y       1000?   1       tlsmgr
+    rewrite   unix  -       -       y       -       -       trivial-rewrite
+    bounce    unix  -       -       y       -       0       bounce
+    defer     unix  -       -       y       -       0       bounce
+    trace     unix  -       -       y       -       0       bounce
+    verify    unix  -       -       y       -       1       verify
+    flush     unix  n       -       y       1000?   0       flush
+    proxymap  unix  -       -       n       -       -       proxymap
+    proxywrite unix -       -       n       -       1       proxymap
+    smtp      unix  -       -       y       -       -       smtp
+    relay     unix  -       -       y       -       -       smtp
+    showq     unix  n       -       y       -       -       showq
+    error     unix  -       -       y       -       -       error
+    retry     unix  -       -       y       -       -       error
+    discard   unix  -       -       y       -       -       discard
+    local     unix  -       n       n       -       -       local
+    virtual   unix  -       n       n       -       -       virtual
+    lmtp      unix  -       -       y       -       -       lmtp
+    anvil     unix  -       -       y       1       1       anvil
+    scache    unix  -       -       y       100     1       scache
+
+---
+# ==================== PERSISTENT VOLUMES ====================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  namespace: ceres
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/postgres
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv
+  namespace: ceres
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/redis
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: keycloak-pv
+  namespace: ceres
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/keycloak
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wg-config-pv
+  namespace: ceres
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/wg-configs
+    type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postfix-pv
+  namespace: ceres
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/postfix
+    type: DirectoryOrCreate
+
+---
+# ==================== PERSISTENT VOLUME CLAIMS ====================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: postgres-pv
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  volumeName: redis-pv
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: keycloak-pv
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wg-config-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: wg-config-pv
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postfix-pvc
+  namespace: ceres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  volumeName: postfix-pv
+
+---
+# ==================== POSTGRESQL ====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              name: ceres-config
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: ceres-config
+              key: POSTGRES_USER
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: ceres-config
+              key: POSTGRES_DB
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ceres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres
+
+---
+# ==================== REDIS ====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - "--requirepass"
+        - "redis123"
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - "-a"
+            - "redis123"
+            - "ping"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ceres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+
+---
+# ==================== POSTFIX SMTP SERVER ====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postfix
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postfix
+  template:
+    metadata:
+      labels:
+        app: postfix
+    spec:
+      containers:
+      - name: postfix
+        image: boky/postfix:latest
+        ports:
+        - containerPort: 25
+          name: smtp
+        - containerPort: 10025
+          name: submission
+        env:
+        - name: MAILNAME
+          value: "ceres.company.local"
+        - name: INBOUND_DEBUGGING
+          value: "0"
+        volumeMounts:
+        - name: postfix-storage
+          mountPath: /var/spool/postfix
+        - name: postfix-config
+          mountPath: /etc/postfix
+          readOnly: true
+        livenessProbe:
+          tcpSocket:
+            port: 25
+          initialDelaySeconds: 30
+          periodSeconds: 30
+      volumes:
+      - name: postfix-storage
+        persistentVolumeClaim:
+          claimName: postfix-pvc
+      - name: postfix-config
+        configMap:
+          name: postfix-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postfix
+  namespace: ceres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 25
+    targetPort: 25
+    name: smtp
+  - port: 10025
+    targetPort: 10025
+    name: submission
+  selector:
+    app: postfix
+
+---
+# ==================== KEYCLOAK ====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: ceres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+      - name: keycloak
+        image: quay.io/keycloak/keycloak:24
+        args:
+        - "start-dev"
+        - "--db=postgres"
+        - "--db-url=jdbc:postgresql://postgres:5432/ceres"
+        - "--db-username=postgres"
+        - "--db-password=ceres123"
+        - "--hostname=auth.ceres.local"
+        - "--proxy=edge"
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: KEYCLOAK_ADMIN
+          valueFrom:
+            configMapKeyRef:
+              name: ceres-config
+              key: KEYCLOAK_ADMIN
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              name: ceres-config
+              key: KEYCLOAK_ADMIN_PASSWORD
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+      volumes:
+      - name: keycloak-storage
+        persistentVolumeClaim:
+          claimName: keycloak-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: ceres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: keycloak
+
+---
+# ==================== WIREGUARD CONFIG MANAGER ====================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wg-manager
+  namespace: ceres
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wg-manager-secret
+  namespace: ceres
+type: Opaque
+stringData:
+  API_TOKEN: "secure-wg-manager-token-change-me"
+  KEYCLOAK_CLIENT_SECRET: "admin-cli-secret"
+  WG_PRIVATE_KEY: "UGF6vvIco01jId5CWUe3871yOTw5+wHrUwqbyPy/Fn8="
+  WG_PUBLIC_KEY: "zttDeGkGM90yz/yUuP3Ni/jdpF0+Y2rlLKtgMOZda1s="
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wg-config-manager
+  namespace: ceres
+  labels:
+    app: wg-config-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wg-config-manager
+  template:
+    metadata:
+      labels:
+        app: wg-config-manager
+    spec:
+      serviceAccountName: wg-manager
+      containers:
+      - name: wg-manager
+        image: python:3.11-slim
+        workingDir: /app
+        command:
+        - sh
+        - -c
+        - pip install -q flask requests && python wg-config-manager.py
+        ports:
+        - containerPort: 5000
+          name: http
+        env:
+        - name: KEYCLOAK_URL
+          value: "http://keycloak:8080"
+        - name: KEYCLOAK_REALM
+          value: "master"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "admin-cli"
+        - name: KEYCLOAK_ADMIN
+          value: "admin"
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wg-manager-secret
+              key: API_TOKEN
+        - name: SMTP_HOST
+          value: "postfix"
+        - name: SMTP_PORT
+          value: "25"
+        - name: SMTP_FROM
+          valueFrom:
+            configMapKeyRef:
+              name: ceres-config
+              key: SMTP_FROM
+        - name: WG_SERVER_IP
+          value: "192.168.1.3"
+        - name: WG_ENDPOINT
+          value: "192.168.1.3:51820"
+        - name: WG_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wg-manager-secret
+              key: WG_PUBLIC_KEY
+        - name: API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: wg-manager-secret
+              key: API_TOKEN
+        - name: DEBUG
+          value: "false"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        - name: wg-config-storage
+          mountPath: /data/wg-configs
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+      volumes:
+      - name: app-code
+        configMap:
+          name: wg-manager-code
+      - name: wg-config-storage
+        persistentVolumeClaim:
+          claimName: wg-config-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wg-config-manager
+  namespace: ceres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+    name: http
+  selector:
+    app: wg-config-manager
+
+---
+# ==================== INGRESS ====================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ceres-ingress
+  namespace: ceres
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: auth.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 8080
+  - host: ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wg-config-manager
+            port:
+              number: 5000

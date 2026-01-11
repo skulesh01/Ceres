@@ -3,8 +3,8 @@
 
 set -e
 
-GITHUB_USER="${1:-yourusername}"
-GITHUB_REPO="${2:-ceres}"
+GITHUB_USER="${1:-skulesh01}"
+GITHUB_REPO="${2:-Ceres}"
 CLUSTER_NAME="${3:-production}"
 
 echo "🚀 Bootstrapping FluxCD for CERES"
@@ -40,10 +40,10 @@ kubectl wait --for=condition=ready --timeout=5m \
 
 # Create CERES namespace
 echo "✓ Creating CERES namespace..."
-kubectl create namespace ceres-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace ceres --dry-run=client -o yaml | kubectl apply -f -
 
 # Label namespace for monitoring
-kubectl label namespace ceres-system \
+kubectl label namespace ceres \
   monitoring=enabled \
   --overwrite
 

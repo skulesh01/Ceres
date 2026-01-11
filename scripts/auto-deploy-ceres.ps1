@@ -1,19 +1,46 @@
 #!/usr/bin/env pwsh
-# Полностью автоматизированный скрипт развертывания CERES
-# Не требует ручного вмешательства - все делает сам
+<#
+.SYNOPSIS
+    CERES Enterprise Platform - Полное автоматическое развертывание (ALL-IN-ONE)
+    
+.DESCRIPTION
+    Развертывает весь CERES стек (37+ сервисов) в Docker Compose одной командой:
+    - PostgreSQL + Redis (база + кэш) ✅
+    - Keycloak (SSO)
+    - Apps (Nextcloud, Gitea, Mattermost, Redmine, Wiki.js)
+    - Monitoring (Prometheus, Grafana, Loki)
+    - Email (Mailu с автоматической рассылкой)
+    - VPN (WireGuard с webhook для новых пользователей)
+    - Edge (Caddy reverse proxy + SSL)
+    
+.EXAMPLE
+    .\auto-deploy-ceres.ps1 -Mode Full
+    .\auto-deploy-ceres.ps1 -Mode Core
+    .\auto-deploy-ceres.ps1 -Mode Core,Keycloak,Apps
+    
+.NOTES
+    Требует: plink.exe в текущей папке, SSH доступ к root@192.168.1.3
+#>
 
 param(
+    [Parameter(Mandatory=$false)]
+    [ValidateSet("Core", "Keycloak", "Apps", "Monitoring", "Email", "VPN", "Edge", "Full")]
+    [string[]]$Mode = @("Full"),
+    
+    [Parameter(Mandatory=$false)]
     [string]$ServerIP = "192.168.1.3",
-    [string]$ServerUser = "root",
-    [string]$ServerPassword = "!r0oT3dc",
-    [string]$GitHubRepo = "skulesh01/Ceres",
-    [string]$GitHubToken = $env:GITHUB_TOKEN
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$Verbose
 )
 
 $ErrorActionPreference = "Stop"
+$plink = ".\plink.exe"
+$sshKey = "!r0oT3dc"
+$composePath = "/opt/ceres/config/compose"
 
 Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║       CERES - Автоматическое развертывание на Proxmox        ║" -ForegroundColor Cyan
+Write-Host "║       CERES - ПОЛНОЕ АВТОМАТИЧЕСКОЕ РАЗВЕРТЫВАНИЕ            ║" -ForegroundColor Cyan
 Write-Host "╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 

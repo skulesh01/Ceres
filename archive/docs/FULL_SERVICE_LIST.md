@@ -46,14 +46,22 @@
 27. **Portainer** - UI для управления Docker
 28. **Uptime Kuma** - мониторинг uptime сервисов
 
+### 📧 EMAIL & COMMUNICATION
+29. **Mailu Admin** - управление доменами и почтовыми ящиками
+30. **Mailu Front** - почтовый gateway (SMTP/IMAP)
+31. **Mailu SMTP (Postfix)** - отправка почты
+32. **Mailu IMAP (Dovecot)** - получение почты
+33. **Roundcube Webmail** - веб-интерфейс для чтения почты
+34. **Mailu Redis** - кэш для mail сервера
+
 ### 🌐 EDGE & NETWORKING
-29. **Caddy** - reverse proxy + автоматический HTTPS
-30. **Cloudflared** - Cloudflare Tunnel (доступ без открытия портов)
-31. **WireGuard (wg-easy)** - self-hosted VPN
+35. **Caddy** - reverse proxy + автоматический HTTPS
+36. **Cloudflared** - Cloudflare Tunnel (доступ без открытия портов)
+37. **WireGuard (wg-easy)** - self-hosted VPN с веб-UI
 
 ---
 
-## 📊 Итого: **31 сервис**
+## 📊 Итого: **37 сервисов**
 
 ### Разбивка по категориям:
 
@@ -65,6 +73,7 @@
 | Project Management | 6 | Taiga (full stack) |
 | Knowledge Base | 2 | Wiki.js (app + init) |
 | Document Management | 5 | Mayan EDMS (full stack) |
+| Email & Communication | 6 | Mailu (full mail server stack) |
 | Monitoring | 7 | Prometheus, Grafana, Loki, exporters |
 | Operations | 2 | Portainer, Uptime Kuma |
 | Networking | 3 | Caddy, Cloudflared, WireGuard |
@@ -78,7 +87,8 @@ CERES
 ├─ base.yml          # Сетевая основа
 ├─ core.yml          # PostgreSQL + Redis (2 сервиса)
 ├─ apps.yml          # Collaboration + Taiga + Wiki (13 сервисов)
-├─ edms.yml          # Mayan EDMS (5 сервисов)
+├─ eail.yml          # Mailu Email Server (6 сервисов) 📧 НОВОЕ!
+├─ mdms.yml          # Mayan EDMS (5 сервисов)
 ├─ monitoring.yml    # Prometheus + Grafana + Loki (7 сервисов)
 ├─ ops.yml           # Portainer + Uptime Kuma (2 сервиса)
 ├─ edge.yml          # Caddy reverse proxy (1 сервис)
@@ -138,6 +148,8 @@ cd scripts
 ## 🌐 Доступ к сервисам (через edge):
 
 ### Основные сервисы:
+- **📧 Mailu (Email):** https://mail.${DOMAIN} 🆕
+- **🔒 WireGuard VPN:** https://vpn.${DOMAIN} 🆕
 - **Keycloak (SSO):** https://auth.${DOMAIN}
 - **Nextcloud:** https://nextcloud.${DOMAIN}
 - **Gitea:** https://gitea.${DOMAIN}

@@ -1,0 +1,155 @@
+# Упрощённый Kubernetes манифест для VPN + SMTP
+# Развёртывание на k3s. Образы зафиксированы, убраны лишние latest.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mail-vpn
+---
+# wg-easy VPN с веб-интерфейсом
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wg-easy
+  namespace: mail-vpn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wg-easy
+  template:
+    metadata:
+      labels:
+        app: wg-easy
+    spec:
+      hostNetwork: true
+      containers:
+      - name: wg-easy
+        image: ghcr.io/wg-easy/wg-easy:14.1.1
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: WG_HOST
+          value: "192.168.1.3"
+        - name: PASSWORD
+          value: "admin"
+        - name: WG_PORT
+          value: "51820"
+        - name: WG_DEFAULT_ADDRESS
+          value: "10.8.0.0/24"
+        - name: WG_DEFAULT_DNS
+          value: "1.1.1.1"
+        ports:
+        - containerPort: 51820
+          protocol: UDP
+          name: wireguard
+        - containerPort: 51821
+          protocol: TCP
+          name: web
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_MODULE
+          privileged: true
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 51821
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 51821
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        volumeMounts:
+        - name: wg-data
+          mountPath: /etc/wireguard
+      volumes:
+      - name: wg-data
+        hostPath:
+          path: /data/wg-easy
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wg-easy
+  namespace: mail-vpn
+spec:
+  type: NodePort
+  ports:
+  - port: 51821
+    targetPort: 51821
+    nodePort: 30821
+    protocol: TCP
+    name: web
+  - port: 51820
+    targetPort: 51820
+    nodePort: 30820
+    protocol: UDP
+    name: wireguard
+  selector:
+    app: wg-easy
+---
+# Postfix SMTP (упрощённая версия для отправки писем)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postfix
+  namespace: mail-vpn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postfix
+  template:
+    metadata:
+      labels:
+        app: postfix
+    spec:
+      containers:
+      - name: postfix
+        image: boky/postfix:3.8.5
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: ALLOWED_SENDER_DOMAINS
+          value: "ceres.local"
+        - name: HOSTNAME
+          value: "mail.ceres.local"
+        ports:
+        - containerPort: 25
+          name: smtp
+        volumeMounts:
+        - name: mail-spool
+          mountPath: /var/spool/postfix
+        readinessProbe:
+          tcpSocket:
+            port: 25
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 25
+          initialDelaySeconds: 10
+          periodSeconds: 15
+      volumes:
+      - name: mail-spool
+        hostPath:
+          path: /data/postfix
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postfix
+  namespace: mail-vpn
+spec:
+  type: ClusterIP
+  ports:
+  - port: 25
+    targetPort: 25
+    protocol: TCP
+  selector:
+    app: postfix
