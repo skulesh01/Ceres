@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-01-12
+
+### Changed
+- Security: удалены хардкоды паролей/хостов; переход на .env переменные.
+- Docs: обновлены основные документы (README, DEPLOYMENT_CHECKLIST.md, SECURITY_SETUP.md, scripts/DEPLOYMENT_GUIDE.md) на `$env:DEPLOY_SERVER_*`.
+- Scripts: добавлен `scripts/flux/reconcile.ps1` для безпарольного reconcile Flux через `plink`/`ssh`.
+- Notice: добавлено предупреждение о неактуальности примеров в `archive/` — используйте актуальные инструкции.
+
 ### Планируется в следующих релизах (v4.0+)
 - eBPF-based networking (Cilium eBPF)
 - Advanced WAF & DDoS protection

@@ -7,7 +7,8 @@
     . .\scripts\_lib\Load-Env.ps1
 #>
 
-$envFile = Join-Path (Split-Path $PSScriptRoot -Parent) ".." ".env"
+$repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$envFile = Join-Path $repoRoot ".env"
 
 if (-not (Test-Path $envFile)) {
     Write-Warning ".env file not found at: $envFile"
@@ -31,8 +32,12 @@ Get-Content $envFile | ForEach-Object {
         $key = $matches[1].Trim()
         $value = $matches[2].Trim()
         
-        # Remove quotes if present
-        $value = $value -replace '^["\']|["\']$', ''
+        # Remove quotes if present (PowerShell 5.1 safe)
+        if ($value.Length -ge 2) {
+            if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+        }
         
         [System.Environment]::SetEnvironmentVariable($key, $value, 'Process')
         Write-Verbose "Set $key"
@@ -53,5 +58,5 @@ if ($missing) {
     $missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     Write-Host "`nPlease update your .env file" -ForegroundColor Yellow
 } else {
-    Write-Host "✓ Environment loaded successfully" -ForegroundColor Green
+    Write-Host "Environment loaded successfully" -ForegroundColor Green
 }
