@@ -19,7 +19,7 @@
     .\auto-deploy-ceres.ps1 -Mode Core,Keycloak,Apps
     
 .NOTES
-    Требует: plink.exe в текущей папке, SSH доступ к root@192.168.1.3
+    Требует: plink.exe в текущей папке, SSH доступ к $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP
 #>
 
 param(
@@ -36,7 +36,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $plink = ".\plink.exe"
-$sshKey = "!r0oT3dc"
+$sshKey = $env:DEPLOY_SERVER_PASSWORD
 $composePath = "/opt/ceres/config/compose"
 
 Write-Host "╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan

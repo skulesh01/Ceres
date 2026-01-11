@@ -14,7 +14,7 @@ param(
 $plink = ".\plink.exe"
 $ServerIP = "192.168.1.3"
 $ServerPort = "51820"
-$SSHPassword = "!r0oT3dc"
+$SSHPassword = $env:DEPLOY_SERVER_PASSWORD
 $OutputPath = ".\vpn-configs"
 
 # Создаём директорию

@@ -31,7 +31,7 @@ param(
     [string]$ServerPort = "51820",
 
     [Parameter(Mandatory=$false)]
-    [string]$SSHPassword = "!r0oT3dc",
+    [string]$SSHPassword = $env:DEPLOY_SERVER_PASSWORD,
 
     [Parameter(Mandatory=$false)]
     [string]$OutputPath = ".\vpn-configs"

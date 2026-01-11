@@ -163,7 +163,7 @@ cd "путь\к\Ceres\scripts"
 
 ```bash
 # 1. Подключитесь к Proxmox серверу
-ssh root@192.168.1.3
+ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP
 
 # 2. Загрузите проект
 # Upload Ceres-deploy.zip to /tmp/ через Web UI или SCP

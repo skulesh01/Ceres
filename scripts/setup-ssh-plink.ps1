@@ -5,7 +5,7 @@ param(
     [string]$PlinkPath = "$HOME\plink.exe",
     [string]$RemoteHost = "192.168.1.3",
     [string]$RemoteUser = "root",
-    [string]$RemotePassword = "!r0oT3dc"
+    [string]$RemotePassword = $env:DEPLOY_SERVER_PASSWORD
 )
 
 Write-Host "Downloading plink.exe from PuTTY project..." -ForegroundColor Cyan
@@ -74,8 +74,8 @@ Write-Host "1. Import module:" -ForegroundColor Gray
 Write-Host "   Import-Module $modulePath" -ForegroundColor White
 Write-Host ""
 Write-Host "2. Run command with password:" -ForegroundColor Gray
-Write-Host "   Invoke-SSHWithPassword -Host '192.168.1.3' -User 'root' -Password '!r0oT3dc' -Command 'ls -la'" -ForegroundColor White
+Write-Host "   Invoke-SSHWithPassword -Host '$env:DEPLOY_SERVER_IP' -User '$env:DEPLOY_SERVER_USER' -Password '$env:DEPLOY_SERVER_PASSWORD' -Command 'ls -la'" -ForegroundColor White
 Write-Host ""
 Write-Host "3. Open interactive shell:" -ForegroundColor Gray
-Write-Host "   Open-SSHShell -Host '192.168.1.3' -User 'root' -Password '!r0oT3dc'" -ForegroundColor White
+Write-Host "   Open-SSHShell -Host '$env:DEPLOY_SERVER_IP' -User '$env:DEPLOY_SERVER_USER' -Password '$env:DEPLOY_SERVER_PASSWORD'" -ForegroundColor White
 Write-Host ""

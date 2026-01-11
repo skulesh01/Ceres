@@ -21,7 +21,7 @@
 ### Шаг 1: Подключитесь к Proxmox
 ```bash
 # Из Windows (если есть SSH):
-ssh root@192.168.1.3
+ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP
 
 # Или через Proxmox Web UI: https://192.168.1.3:8006
 # Node → Shell
@@ -88,7 +88,7 @@ cd Ceres
 ```powershell
 # На Windows (если SSH установлен)
 cd "e:\Новая папка"
-scp -r Ceres root@192.168.1.3:/opt/
+scp -r Ceres $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP:/opt/
 ```
 
 #### Вариант C: Через ZIP архив
@@ -100,7 +100,7 @@ Compress-Archive -Path Ceres -DestinationPath Ceres.zip
 # Загрузите Ceres.zip через Proxmox Web UI:
 # Node → local → Upload
 # Или через SCP:
-scp Ceres.zip root@192.168.1.3:/tmp/
+scp Ceres.zip $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP:/tmp/
 ```
 
 Затем на Proxmox:

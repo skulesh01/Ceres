@@ -12,7 +12,8 @@ import os
 # Configuration
 HOST = "192.168.1.3"
 USER = "root"
-PASSWORD = "!r0oT3dc"
+import os
+PASSWORD = os.environ.get("DEPLOY_SERVER_PASSWORD", "")
 REPO = "skulesh01/Ceres"
 
 def run_ssh_command(cmd, verbose=True):

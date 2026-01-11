@@ -11,7 +11,7 @@
 # ==================== КОНФИГУРАЦИЯ ====================
 $ServerIP = "192.168.1.3"
 $ServerSSHUser = "root"
-$ServerSSHPass = "!r0oT3dc"
+$ServerSSHPass = $env:DEPLOY_SERVER_PASSWORD
 $PlinkPath = "$PSScriptRoot\plink.exe"
 
 # Проверяем plink

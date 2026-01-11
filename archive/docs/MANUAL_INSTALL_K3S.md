@@ -20,8 +20,8 @@ curl -fsSL https://get.k3s.io | sh -
 
 ### Способ 1: Через SSH
 ```powershell
-ssh root@192.168.1.3
-# Пароль: !r0oT3dc
+ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP
+# Пароль: используйте DEPLOY_SERVER_PASSWORD из .env
 ```
 
 ### Способ 2: Через Proxmox веб консоль
@@ -63,7 +63,7 @@ curl -fsSL https://get.k3s.io | sh -
 ---
 
 **Статус:** Ожидается ручное выполнение
-# Введите пароль: !r0oT3dc
+# Введите пароль: из переменной окружения DEPLOY_SERVER_PASSWORD
 ```
 
 ### На сервере (после подключения):
@@ -96,7 +96,7 @@ cat /etc/rancher/k3s/k3s.yaml
 
 ```powershell
 # На Windows PowerShell:
-scp root@192.168.1.3:/etc/rancher/k3s/k3s.yaml $HOME\k3s.yaml
+scp $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP:/etc/rancher/k3s/k3s.yaml $HOME\k3s.yaml
 ```
 
 ---
@@ -129,13 +129,13 @@ if (-not (Test-Path $plink)) {
 }
 
 # Запустим установку (вводит пароль автоматически)
-& $plink -pw "!r0oT3dc" root@192.168.1.3 "curl -sfL https://get.k3s.io | sh -"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "curl -sfL https://get.k3s.io | sh -"
 
 # Ждём 60 секунд пока k3s инициализируется
 Start-Sleep -Seconds 60
 
 # Проверяем
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "k3s --version"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "k3s --version"
 ```
 
 ---
@@ -150,7 +150,7 @@ Start-Sleep -Seconds 60
 ---
 
 **Помните:**
-- SSH пароль: `!r0oT3dc`
+- SSH пароль: используйте `DEPLOY_SERVER_PASSWORD` из .env
 - IP сервера: `192.168.1.3`
 - Установка k3s занимает 5-10 минут
 - После установки нужно дождаться инициализации (30-60 сек)

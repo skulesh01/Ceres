@@ -81,7 +81,7 @@ source .env
 2. На вашей машине:
    ```bash
    # Скопируйте kubeconfig с сервера
-   scp root@192.168.1.3:/etc/rancher/k3s/k3s.yaml ~/.kube/ceres.yaml
+   scp $DEPLOY_SERVER_USER@$DEPLOY_SERVER_IP:/etc/rancher/k3s/k3s.yaml ~/.kube/ceres.yaml
    
    # Подготовьте переменные
    cp .env.example .env

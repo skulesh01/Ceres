@@ -32,7 +32,7 @@ param(
 )
 
 $plink = ".\plink.exe"
-$sshKey = "!r0oT3dc"
+$sshKey = $env:DEPLOY_SERVER_PASSWORD
 
 Write-Host "`n╔═════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
 Write-Host "║     CERES FULL STACK - ПОЛНОЕ АВТОМАТИЧЕСКОЕ РАЗВЕРТЫВАНИЕ  ║" -ForegroundColor Cyan

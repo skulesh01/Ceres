@@ -18,13 +18,13 @@
 
 .EXAMPLE
     .\deploy-quick.ps1
-    .\deploy-quick.ps1 -ServerIp "192.168.1.3" -Password "!r0oT3dc"
+    .\deploy-quick.ps1 -ServerIp $env:DEPLOY_SERVER_IP -Password $env:DEPLOY_SERVER_PASSWORD
 #>
 
 [CmdletBinding()]
 param(
     [string]$ServerIp = "192.168.1.3",
-    [string]$Password = "!r0oT3dc"
+    [string]$Password = $env:DEPLOY_SERVER_PASSWORD
 )
 
 $ErrorActionPreference = "Stop"

@@ -31,10 +31,10 @@ ssh-keygen -t ed25519 -f $HOME\.ssh\ceres -N ""
 
 # 2. Отправляем публичный ключ на сервер
 $pubKey = Get-Content $HOME\.ssh\ceres.pub
-ssh root@192.168.1.3 "mkdir -p ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "mkdir -p ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 
 # 3. Проверяем подключение
-ssh root@192.168.1.3 "uname -a"
+ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "uname -a"
 ```
 
 ## 📋 Шаг 3: Получаем kubeconfig
@@ -46,7 +46,7 @@ cat /etc/rancher/k3s/k3s.yaml
 # Скопируйте содержимое
 
 # Или через PowerShell:
-scp root@192.168.1.3:/etc/rancher/k3s/k3s.yaml $HOME\k3s.yaml
+scp $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP:/etc/rancher/k3s/k3s.yaml $HOME\k3s.yaml
 ```
 
 ## 🔑 Шаг 4: Добавляем секреты в GitHub
@@ -121,7 +121,7 @@ GH_REPO=skulesh01/Ceres ./scripts/gh-ops/gh-actions.sh run .github/workflows/cer
 - Логи workflow → Actions → выберите run
 - Логи на сервере → `/srv/ceres/logs/`
 - Чек зависимостей → `bash /srv/ceres/scripts/check-dependencies.sh`
-- SSH тест → `ssh root@192.168.1.3 "echo OK"`
+- SSH тест → `ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "echo OK"`
 
 ---
 

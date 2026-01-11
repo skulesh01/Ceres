@@ -28,7 +28,7 @@ $kubeconfigB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes
 $sshKey = Get-Content "$HOME\.ssh\ceres" -Raw
 $deployHost = "192.168.1.3"
 $deployUser = "root"
-$deployPassword = "!r0oT3dc"
+$deployPassword = $env:DEPLOY_SERVER_PASSWORD
 
 # Установка секретов
 Write-Host "`nУстановка секретов в репозиторий skulesh01/Ceres..." -ForegroundColor Cyan

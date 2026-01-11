@@ -90,7 +90,7 @@ Instead of using passwords, set up SSH keys:
 ssh-keygen -t ed25519 -f ~/.ssh/ceres_deploy -C "ceres-deploy"
 
 # 2. Copy to server (will ask for password once)
-type ~/.ssh/ceres_deploy.pub | ssh root@192.168.1.3 "cat >> ~/.ssh/authorized_keys"
+type ~/.ssh/ceres_deploy.pub | ssh $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "cat >> ~/.ssh/authorized_keys"
 
 # 3. Update scripts to use key instead of password
 # Remove -pw flag and add -i flag in scripts

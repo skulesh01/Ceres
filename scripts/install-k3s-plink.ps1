@@ -4,7 +4,7 @@
 $plink = "$HOME\plink.exe"
 $host = "192.168.1.3"
 $user = "root"
-$pass = "!r0oT3dc"
+$pass = $env:DEPLOY_SERVER_PASSWORD
 $scriptPath = "/tmp/install-k3s.sh"
 
 Write-Host ""

@@ -58,21 +58,21 @@ cd 'E:\Новая папка\Ceres'
 
 # 1. Загрузить манифесты на сервер
 $plink = ".\plink.exe"
-Get-Content 'k8s-mail-vpn-simple.yaml' -Raw | & $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "cat > /tmp/k8s-mail-vpn.yaml"
-Get-Content 'k8s-webhook-listener-fixed.yaml' -Raw | & $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "cat > /tmp/k8s-webhook.yaml"
+Get-Content 'k8s-mail-vpn-simple.yaml' -Raw | & $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP" "cat > /tmp/k8s-mail-vpn.yaml"
+Get-Content 'k8s-webhook-listener-fixed.yaml' -Raw | & $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP" "cat > /tmp/k8s-webhook.yaml"
 
 # 2. Применить
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "kubectl apply -f /tmp/k8s-mail-vpn.yaml -f /tmp/k8s-webhook.yaml"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP" "kubectl apply -f /tmp/k8s-mail-vpn.yaml -f /tmp/k8s-webhook.yaml"
 
 # 3. Проверить pods
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "kubectl get pods -n mail-vpn -o wide"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP" "kubectl get pods -n mail-vpn -o wide"
 
 # 4. Если pods старые - перезапустить
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "kubectl delete pods -n mail-vpn --all"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP" "kubectl delete pods -n mail-vpn --all"
 
 # 5. Ждём 90 секунд и проверяем
 Start-Sleep -Seconds 90
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "kubectl get pods -n mail-vpn"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP" "kubectl get pods -n mail-vpn"
 ```
 
 ---
@@ -169,7 +169,7 @@ Invoke-RestMethod -Uri 'http://192.168.1.3:30500/webhook/keycloak' `
 ping 192.168.1.3
 
 # 2. SSH доступен?
-ssh root@192.168.1.3  # пароль: !r0oT3dc
+ssh "$env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP"  # пароль: (используйте DEPLOY_SERVER_PASSWORD из .env)
 
 # 3. K3s работает?
 systemctl status k3s

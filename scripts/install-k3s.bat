@@ -9,16 +9,16 @@ echo ═════════════════════════
 echo   CERES - K3s Installation
 echo ════════════════════════════════════════════════════════
 echo.
-echo NOTE: SSH will ask for password. Enter: !r0oT3dc
+echo NOTE: Set DEPLOY_SERVER_PASSWORD in .env; scripts will use it automatically.
 echo.
 
 REM Execute SSH installation
-ssh -o StrictHostKeyChecking=no root@192.168.1.3 "curl -fsSL https://get.k3s.io | sh -"
+ssh -o StrictHostKeyChecking=no %DEPLOY_SERVER_USER%@%DEPLOY_SERVER_IP% "curl -fsSL https://get.k3s.io | sh -"
 
 echo.
 echo Installation started! This may take 5-10 minutes.
 echo.
 echo Check status with:
-echo   ssh root@192.168.1.3 "kubectl get nodes"
+echo   ssh %DEPLOY_SERVER_USER%@%DEPLOY_SERVER_IP% "kubectl get nodes"
 echo.
 pause

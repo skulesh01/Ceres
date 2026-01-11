@@ -4,10 +4,10 @@
 param(
     [string]$ProxmoxHost = "192.168.1.1",
     [string]$ProxmoxUser = "root",
-    [string]$ProxmoxPassword = "!r0oT3dc",
+    [string]$ProxmoxPassword = $env:PROXMOX_PASSWORD,
     [string]$VMHost = "192.168.1.3",
     [string]$VMUser = "root",
-    [string]$VMPassword = "!r0oT3dc",
+    [string]$VMPassword = $env:DEPLOY_SERVER_PASSWORD,
     [string]$GitHubToken = $env:GITHUB_TOKEN,
     [string]$GitHubRepo = "skulesh01/Ceres"
 )

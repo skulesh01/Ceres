@@ -3,7 +3,7 @@
 
 $host = "192.168.1.3"
 $user = "root"
-$pass = "!r0oT3dc"
+$pass = $env:DEPLOY_SERVER_PASSWORD
 
 Write-Host ""
 Write-Host "╔════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -22,7 +22,7 @@ try {
     }
 } catch {
     Write-Host "      ✗ SSH connection failed" -ForegroundColor Red
-    Write-Host "      Make sure password is correct: !r0oT3dc" -ForegroundColor Yellow
+    Write-Host "      Ensure DEPLOY_SERVER_PASSWORD is set via .env" -ForegroundColor Yellow
     exit 1
 }
 

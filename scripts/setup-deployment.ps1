@@ -51,7 +51,7 @@ if (-not $useKey) {
         "echo '✓ Key added successfully'"
     )
     
-    Write-Host "  Note: You will be prompted for password. Enter: !r0oT3dc" -ForegroundColor Yellow
+    Write-Host "  Note: Ensure DEPLOY_SERVER_PASSWORD is set via .env; no interactive prompts required." -ForegroundColor Yellow
     
     foreach ($cmd in $remoteCmds) {
         ssh root@$RemoteHost $cmd

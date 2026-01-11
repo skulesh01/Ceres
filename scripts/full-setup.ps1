@@ -4,7 +4,7 @@
 param(
     [string]$RemoteHost = "192.168.1.3",
     [string]$RemoteUser = "root",
-    [string]$RemotePassword = "!r0oT3dc"
+    [string]$RemotePassword = $env:DEPLOY_SERVER_PASSWORD
 )
 
 Write-Host ""

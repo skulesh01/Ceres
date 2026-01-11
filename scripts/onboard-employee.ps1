@@ -44,7 +44,7 @@ param(
     [string]$EmailFrom = "admin@ceres.local",
 
     [Parameter(Mandatory=$false)]
-    [string]$SshPassword = "!r0oT3dc",
+    [string]$SshPassword = $env:DEPLOY_SERVER_PASSWORD,
 
     [Parameter(Mandatory=$false)]
     [string]$OutputPath = ".\vpn-configs"

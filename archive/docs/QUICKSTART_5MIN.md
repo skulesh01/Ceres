@@ -16,7 +16,7 @@ cd 'E:\Новая папка\Ceres'
 Test-Connection 192.168.1.3 -Count 2
 
 # Проверить SSH (должен вернуть hostname)
-.\plink.exe -pw "!r0oT3dc" -batch root@192.168.1.3 "hostname"
+.\plink.exe -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "hostname"
 ```
 
 ## Шаг 2: Применение манифестов (2 мин)
@@ -33,13 +33,13 @@ $plink = ".\plink.exe"
 
 # 1. Загружаем манифесты
 Get-Content 'k8s-mail-vpn-simple.yaml' -Raw | 
-    & $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "cat > /tmp/mail-vpn.yaml"
+    & $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "cat > /tmp/mail-vpn.yaml"
 
 Get-Content 'k8s-webhook-listener-fixed.yaml' -Raw | 
-    & $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "cat > /tmp/webhook.yaml"
+    & $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "cat > /tmp/webhook.yaml"
 
 # 2. Применяем
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 @"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP @"
 kubectl apply -f /tmp/mail-vpn.yaml
 kubectl apply -f /tmp/webhook.yaml
 echo 'Манифесты применены!'
@@ -53,7 +53,7 @@ echo 'Манифесты применены!'
 Start-Sleep -Seconds 60
 
 # Проверяем статус
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "kubectl get pods -n mail-vpn"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "kubectl get pods -n mail-vpn"
 ```
 
 **Ожидаемый результат:**
@@ -84,7 +84,7 @@ Invoke-RestMethod -Uri 'http://192.168.1.3:30500/webhook/keycloak' `
 # Ожидается: {"status":"success","username":"testuser","ip":"10.8.0.X"}
 
 # Тест 3: Проверка WireGuard peers
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "wg show wg0"
+& $plink -pw "$env:DEPLOY_SERVER_PASSWORD" -batch $env:DEPLOY_SERVER_USER@$env:DEPLOY_SERVER_IP "wg show wg0"
 ```
 
 ## ✅ Готово!

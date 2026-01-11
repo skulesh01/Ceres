@@ -97,7 +97,7 @@ VM3_DISK=40
 GATEWAY="192.168.1.1"
 NETMASK="24"
 NAMESERVER="8.8.8.8"
-ROOT_PASSWORD="!r0oT3dc"
+ROOT_PASSWORD="${DEPLOY_SERVER_PASSWORD}"
 
 # Service distribution logic:
 # VM1 (Core): PostgreSQL, Redis, Keycloak

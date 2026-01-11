@@ -1,7 +1,7 @@
 param(
     [string]$ServerIP = "192.168.1.3",
     [string]$ServerUser = "root",
-    [string]$ServerPassword = "!r0oT3dc",
+    [string]$ServerPassword = $env:DEPLOY_SERVER_PASSWORD,
     [string]$Gateway = "192.168.1.1"
 )
 
