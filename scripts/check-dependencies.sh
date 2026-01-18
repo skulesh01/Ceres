@@ -4,6 +4,13 @@ set -euo pipefail
 # Check core dependencies for Linux server
 echo "[CHECK] Core dependencies..."
 
+# Fix network/DNS first
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/fix-network.sh" ]; then
+    echo "[NETWORK] Checking and fixing network configuration..."
+    bash "$SCRIPT_DIR/fix-network.sh" || echo "[WARN] Network fix script failed, continuing anyway..."
+fi
+
 MISSING_DEPS=()
 
 # Essential commands
