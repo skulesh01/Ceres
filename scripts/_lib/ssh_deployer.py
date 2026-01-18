@@ -22,6 +22,68 @@ except ImportError:
     import paramiko
 
 
+class ProgressBar:
+    """Simple ASCII progress bar with stage tracking"""
+    
+    def __init__(self, width: int = 50):
+        self.width = width
+        self.stages = []
+        self.current_stage = 0
+        self.start_time = time.time()
+    
+    def add_stage(self, name: str, weight: float = 1.0):
+        """Add a deployment stage with relative weight"""
+        self.stages.append({'name': name, 'weight': weight, 'done': False})
+    
+    def update(self, progress: float = None):
+        """Update progress bar (0.0-1.0) or auto-increment current stage"""
+        if progress is None:
+            # Auto-complete current stage and move to next
+            if self.current_stage < len(self.stages):
+                self.stages[self.current_stage]['done'] = True
+                self.current_stage += 1
+            progress = self._calculate_progress()
+        
+        elapsed = time.time() - self.start_time
+        self._draw(progress, elapsed)
+    
+    def _calculate_progress(self) -> float:
+        """Calculate overall progress based on completed stages"""
+        if not self.stages:
+            return 0.0
+        total_weight = sum(s['weight'] for s in self.stages)
+        done_weight = sum(s['weight'] for s in self.stages if s['done'])
+        return done_weight / total_weight
+    
+    def _draw(self, progress: float, elapsed: int):
+        """Draw progress bar"""
+        progress = max(0.0, min(1.0, progress))
+        filled = int(self.width * progress)
+        bar = '█' * filled + '░' * (self.width - filled)
+        
+        percent = int(progress * 100)
+        stage = self.stages[self.current_stage]['name'] if self.current_stage < len(self.stages) else 'Done'
+        
+        # Estimate remaining time
+        if progress > 0:
+            total_time = elapsed / progress
+            remaining = int(total_time - elapsed)
+            eta = f"{remaining // 60}m {remaining % 60}s"
+        else:
+            eta = "calculating..."
+        
+        # Print on same line (use \r)
+        sys.stdout.write(f"\r[{bar}] {percent:3d}% | {stage:25s} | {elapsed:3d}s → {eta}")
+        sys.stdout.flush()
+    
+    def finish(self):
+        """Mark as complete and print newline"""
+        for s in self.stages:
+            s['done'] = True
+        self._draw(1.0, int(time.time() - self.start_time))
+        print()  # Newline
+
+
 class SSHDeployer:
     """SSH deployment helper with archive, upload, execute capabilities"""
     
