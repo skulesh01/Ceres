@@ -147,7 +147,7 @@ Headroom for additional services:
 
 ```bash
 # SSH into server
-.\plink.exe -pw "!r0oT3dc" -batch root@192.168.1.3
+.\plink.exe -pw "<DEPLOY_PASSWORD>" -batch root@192.168.1.3
 
 # Navigate to compose directory
 cd /opt/ceres/config/compose

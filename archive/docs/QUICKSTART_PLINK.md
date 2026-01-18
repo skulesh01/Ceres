@@ -13,7 +13,7 @@ Invoke-WebRequest -Uri "https://the.earth.li/~sgtatham/putty/latest/w64/plink.ex
 ### Шаг 2: Используй вместо ssh
 ```powershell
 $plink = "$HOME\plink.exe"
-$pass = "!r0oT3dc"
+$pass = "<DEPLOY_PASSWORD>"
 $host = "192.168.1.3"
 
 # Вместо:  ssh root@192.168.1.3 "command"
@@ -40,7 +40,7 @@ gh workflow run ceres-deploy.yml -R skulesh01/Ceres
 ### Вариант B: Вручную (быстрее)
 ```powershell
 $plink = "$HOME\plink.exe"
-$pass = "!r0oT3dc"
+$pass = "<DEPLOY_PASSWORD>"
 
 # 1. SSH ключ
 ssh-keygen -t ed25519 -f "$HOME\.ssh\ceres" -N ""

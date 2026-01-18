@@ -19,7 +19,7 @@ ssh root@192.168.1.3 "command"
 ### plink (PuTTY)
 ```powershell
 $plink = "$HOME\plink.exe"
-& $plink -pw "!r0oT3dc" -batch root@192.168.1.3 "command"
+& $plink -pw "<DEPLOY_PASSWORD>" -batch root@192.168.1.3 "command"
 # ✅ Пароль передан как аргумент - полная автоматизация!
 ```
 
@@ -40,7 +40,7 @@ Write-Host "✓ plink.exe готов в $plinkPath"
 ### 2️⃣ Тестировать подключение
 ```powershell
 $plink = "$HOME\plink.exe"
-$pass = "!r0oT3dc"
+$pass = "<DEPLOY_PASSWORD>"
 
 & $plink -pw $pass -batch root@192.168.1.3 "uname -a"
 ```
@@ -57,7 +57,7 @@ ssh-keygen -t ed25519 -f "$HOME\.ssh\ceres" -N ""
 ### 4️⃣ Добавить публичный ключ на сервер (с plink)
 ```powershell
 $plink = "$HOME\plink.exe"
-$pass = "!r0oT3dc"
+$pass = "<DEPLOY_PASSWORD>"
 $pubKey = Get-Content "$HOME\.ssh\ceres.pub" -Raw
 
 & $plink -pw $pass -batch root@192.168.1.3 "mkdir -p ~/.ssh"
@@ -81,7 +81,7 @@ ssh -i "$HOME\.ssh\ceres" root@192.168.1.3 "ls"
 ### Простой скрипт с plink
 ```powershell
 param(
-    [string]$Pass = "!r0oT3dc",
+    [string]$Pass = "<DEPLOY_PASSWORD>",
     [string]$Host = "192.168.1.3",
     [string]$User = "root"
 )
@@ -102,7 +102,7 @@ scp -i "$HOME\.ssh\ceres" $User@$Host":/etc/hosts" ./hosts.txt
 ```powershell
 $plink = "$HOME\plink.exe"
 $sshKey = "$HOME\.ssh\ceres"
-$pass = "!r0oT3dc"
+$pass = "<DEPLOY_PASSWORD>"
 
 # 1. Регистрировать ключ
 $pub = Get-Content "$sshKey.pub" -Raw

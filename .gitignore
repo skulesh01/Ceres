@@ -1,5 +1,15 @@
 # .gitignore для проекта Ceres
 
+# 🔐 КРИТИЧНО: Приватный проект с паролями
+../Ceres-Private/
+*-Private/
+credentials.json
+deploy-to-proxmox.py
+setup-ssh.py
+setup-ssh.ps1
+remote-deploy.py
+remote-deploy.ps1
+
 # 🔐 Секретные файлы
 config/.env
 config/.env.*
@@ -9,6 +19,8 @@ config/.env.*.backup
 .env
 .env.*
 !.env.example
+terraform.tfvars
+!terraform.tfvars.example
 
 # 📦 Виртуальные окружения и зависимости
 venv/

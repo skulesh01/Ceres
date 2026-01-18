@@ -38,7 +38,7 @@ gh auth login
 - **SSH_PRIVATE_KEY** - приватный SSH ключ для доступа к серверу
 - **DEPLOY_HOST** - IP адрес сервера (192.168.1.3)
 - **DEPLOY_USER** - пользователь для SSH (root)
-- **DEPLOY_PASSWORD** - пароль для SSH (!r0oT3dc)
+- **DEPLOY_PASSWORD** - пароль для SSH (<DEPLOY_PASSWORD>)
 
 ## Шаг 4: Запустить деплоймент
 
@@ -99,7 +99,7 @@ root
 
 ### DEPLOY_PASSWORD
 ```
-!r0oT3dc
+<DEPLOY_PASSWORD>
 ```
 
 ## Что дальше?

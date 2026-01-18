@@ -96,7 +96,7 @@ ip -4 addr
 cd "E:\Новая папка\Ceres"
 
 # Запустить установку k3s
-& "$HOME\plink.exe" -pw "!r0oT3dc" -batch root@192.168.1.3 "curl -fsSL https://get.k3s.io | sh -"
+& "$HOME\plink.exe" -pw "<DEPLOY_PASSWORD>" -batch root@192.168.1.3 "curl -fsSL https://get.k3s.io | sh -"
 ```
 
 ---

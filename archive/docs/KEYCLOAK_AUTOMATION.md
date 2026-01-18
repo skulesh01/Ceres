@@ -56,10 +56,10 @@ Invoke-RestMethod -Uri "http://192.168.1.3:30500/webhook/keycloak" `
 
 ```powershell
 # Логи webhook
-.\plink.exe -pw "!r0oT3dc" -batch root@192.168.1.3 "kubectl logs -n mail-vpn -l app=webhook-listener -f"
+.\plink.exe -pw "<DEPLOY_PASSWORD>" -batch root@192.168.1.3 "kubectl logs -n mail-vpn -l app=webhook-listener -f"
 
 # Проверка VPN
-.\plink.exe -pw "!r0oT3dc" -batch root@192.168.1.3 "wg show"
+.\plink.exe -pw "<DEPLOY_PASSWORD>" -batch root@192.168.1.3 "wg show"
 ```
 
 **Готово! Полная автоматизация работает!** 🚀

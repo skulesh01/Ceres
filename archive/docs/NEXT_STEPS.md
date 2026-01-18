@@ -111,7 +111,7 @@ curl -fsSL https://get.k3s.io | sh -
 ```bash
 ssh root@192.168.1.3
 
-# Введите пароль: !r0oT3dc
+# Введите пароль: <DEPLOY_PASSWORD>
 
 # На сервере введите:
 curl -fsSL https://get.k3s.io | sh -
@@ -167,7 +167,7 @@ gh run watch -R skulesh01/Ceres
 
 ## ⚠️ ВАЖНО
 
-- **Пароль:** !r0oT3dc
+- **Пароль:** <DEPLOY_PASSWORD>
 - **IP сервера:** 192.168.1.3
 - **Пользователь:** root
 

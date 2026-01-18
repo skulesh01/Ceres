@@ -10,11 +10,11 @@ Invoke-WebRequest -Uri "https://the.earth.li/~sgtatham/putty/latest/w64/plink.ex
     -OutFile "$HOME\plink.exe" -UseBasicParsing
 
 # 2. Теперь используй plink вместо ssh (пароль передается автоматически)
-& "$HOME\plink.exe" -pw "!r0oT3dc" root@192.168.1.3 "echo OK"
+& "$HOME\plink.exe" -pw "<DEPLOY_PASSWORD>" root@192.168.1.3 "echo OK"
 
 # 3. Используй в скриптах вместо ssh:
 $pubKey = Get-Content "$HOME\.ssh\ceres.pub" -Raw
-& "$HOME\plink.exe" -pw "!r0oT3dc" root@192.168.1.3 "mkdir -p ~/.ssh; echo '$pubKey' >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys"
+& "$HOME\plink.exe" -pw "<DEPLOY_PASSWORD>" root@192.168.1.3 "mkdir -p ~/.ssh; echo '$pubKey' >> ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys"
 ```
 
 После этого SSH-ключ будет зарегистрирован, и дальше можно использовать обычный `ssh -i` без пароля.
@@ -48,12 +48,12 @@ ls "$HOME\.ssh\ceres*"
 ## Шаг 3: Добавьте публичный ключ на сервер
 
 ```powershell
-# Этот команда попросит пароль (введите: !r0oT3dc)
+# Этот команда попросит пароль (введите: <DEPLOY_PASSWORD>)
 $pubKey = Get-Content "$HOME\.ssh\ceres.pub" -Raw
 ssh root@192.168.1.3 "mkdir -p ~/.ssh && echo '$pubKey' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 ```
 
-**Вводит пароль:** !r0oT3dc
+**Вводит пароль:** <DEPLOY_PASSWORD>
 
 ## Шаг 4: Проверьте доступ без пароля
 
