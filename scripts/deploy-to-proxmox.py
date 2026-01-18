@@ -79,7 +79,8 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
         # Clone project from GitHub (no history with --depth 1)
         log_msg("\n>>> Cloning CERES project from GitHub...")
         github_repo = "https://github.com/skulesh01/Ceres.git"
-        clone_cmd = f"cd {remote_dir} && git clone --depth 1 {github_repo} . 2>&1"
+        # Use git clone with target directory to avoid empty folder issues
+        clone_cmd = f"git clone --depth 1 {github_repo} {remote_dir}_tmp && mv {remote_dir}_tmp/* {remote_dir}/ && rmdir {remote_dir}_tmp 2>&1"
         result = deployer.run_command(clone_cmd, show_output=True, stream_output=False)
         if result:
             log_msg("[OK] Project cloned successfully")
