@@ -82,7 +82,9 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
         import shutil
         
         github_repo = "https://github.com/skulesh01/Ceres.git"
-        local_clone_dir = Path("/tmp/ceres-deploy-clone")
+        # Use proper Windows temp path
+        import tempfile
+        local_clone_dir = Path(tempfile.gettempdir()) / "ceres-deploy-clone"
         
         # Clean up any previous clone
         if local_clone_dir.exists():
@@ -102,11 +104,11 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
             
             # Upload entire project to remote
             log_msg(">>> Uploading project to remote server...")
-            deployer.upload_dir(str(local_clone_dir), remote_dir)
+            deployer.upload_dir(local_clone_dir, remote_dir)
             log_msg("[OK] Project uploaded successfully")
             
             # Clean up local clone
-            shutil.rmtree(local_clone_dir)
+            shutil.rmtree(local_clone_dir, ignore_errors=True)
         else:
             log_msg("[ERROR] Git clone failed - compose directory missing")
             deployer.close()
