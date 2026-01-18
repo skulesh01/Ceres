@@ -102,8 +102,19 @@ echo "Dependencies installed"
     print("[OK] Dependencies ready")
     progress.update()
     
-    print("\n>>> Starting CERES deployment...\n")
-    deployer.run_command(f"cd {remote_dir} && python3 auto-deploy.py 2>&1 >> {remote_dir}/logs/deployment.log || python3 Ceres/scripts/auto-deploy.py 2>&1 >> {remote_dir}/logs/deployment.log")
+    print("\n>>> Starting CERES deployment orchestration...\n")
+    print("=" * 80)
+    print("LIVE OUTPUT FROM SERVER:")
+    print("=" * 80 + "\n")
+    
+    # Run with streaming output to see real-time logs
+    deployer.run_command(
+        f"cd {remote_dir} && python3 auto-deploy.py 2>&1 | tee {remote_dir}/logs/deployment.log || python3 Ceres/scripts/auto-deploy.py 2>&1 | tee {remote_dir}/logs/deployment.log",
+        show_output=True,
+        stream_output=True
+    )
+    
+    print("\n" + "=" * 80)
     
     # Download final logs
     print("\n>>> Retrieving deployment logs from server...")

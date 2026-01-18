@@ -113,10 +113,15 @@ class SSHDeployer:
             print(f"[ERROR] Connection failed: {e}")
             return False
     
-    def run_command(self, cmd: str, show_output: bool = True) -> bool:
+    def run_command(self, cmd: str, show_output: bool = True, stream_output: bool = False) -> bool:
         """Execute command on remote server
         
         Supports multi-line scripts and environment variables.
+        
+        Args:
+            cmd: Command to execute
+            show_output: Show output to console
+            stream_output: Stream output in real-time (line by line as it comes)
         """
         if not self.ssh:
             print("[ERROR] Not connected")
@@ -130,17 +135,50 @@ class SSHDeployer:
             stdout = chan.makefile('r')
             stderr = chan.makefile_stderr('r')
             
-            if show_output:
-                for line in stdout:
-                    # Decode if bytes
-                    if isinstance(line, bytes):
-                        line = line.decode('utf-8', errors='ignore')
-                    print(f"  {line.rstrip()}")
-                for line in stderr:
-                    if isinstance(line, bytes):
-                        line = line.decode('utf-8', errors='ignore')
-                    if line.strip():
-                        print(f"  [ERR] {line.rstrip()}")
+            if show_output or stream_output:
+                # Read and display output in real-time
+                import select
+                import sys
+                
+                while True:
+                    # Check if there's data to read from either stdout or stderr
+                    readable, _, _ = select.select([stdout, stderr], [], [], 0.1)
+                    
+                    for stream in readable:
+                        line = stream.readline()
+                        if not line:
+                            continue
+                        
+                        # Decode if bytes
+                        if isinstance(line, bytes):
+                            line = line.decode('utf-8', errors='ignore')
+                        
+                        line = line.rstrip()
+                        if line:
+                            if stream == stderr:
+                                print(f"  [ERR] {line}")
+                            else:
+                                print(f"  {line}")
+                            
+                            # Flush to ensure real-time display
+                            sys.stdout.flush()
+                    
+                    # Check if process is done
+                    if chan.exit_status_ready():
+                        # Read any remaining output
+                        for line in stdout:
+                            if isinstance(line, bytes):
+                                line = line.decode('utf-8', errors='ignore')
+                            line = line.rstrip()
+                            if line:
+                                print(f"  {line}")
+                        for line in stderr:
+                            if isinstance(line, bytes):
+                                line = line.decode('utf-8', errors='ignore')
+                            line = line.rstrip()
+                            if line:
+                                print(f"  [ERR] {line}")
+                        break
             
             exit_code = chan.recv_exit_status()
             return exit_code == 0
