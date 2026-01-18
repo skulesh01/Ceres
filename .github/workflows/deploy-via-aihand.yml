@@ -1,0 +1,343 @@
+name: Deploy Ceres via AI-hand Proxy
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_host:
+        description: 'Server IP or hostname'
+        required: true
+        default: '192.168.1.3'
+      branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'main'
+      domain:
+        description: 'Domain for Ceres'
+        required: false
+        default: 'ceres.local'
+
+  push:
+    branches:
+      - main
+      - staging
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+
+  release:
+    types: [published]
+
+env:
+  AI_HAND_REPO: 'https://github.com/your-org/AI-hand.git'
+  CERES_REPO: 'https://github.com/${{ github.repository }}.git'
+  DEPLOY_PATH: '/opt/ceres'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Ceres
+        uses: actions/checkout@v4
+
+      - name: Run test suite
+        run: |
+          chmod +x tests/*.sh 2>/dev/null || true
+          if [ -f tests/run_tests.sh ]; then
+            ./tests/run_tests.sh
+          else
+            echo "⚠️  No tests found, skipping..."
+          fi
+
+  deploy:
+    name: Deploy to Server
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Ceres
+        uses: actions/checkout@v4
+        with:
+          path: ceres
+
+      - name: Checkout AI-hand Proxy
+        uses: actions/checkout@v4
+        with:
+          repository: 'your-org/AI-hand'  # замените на ваш репозиторий
+          path: ai-hand
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Configure SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ github.event.inputs.server_host || secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Install PowerShell
+        run: |
+          # Install PowerShell на Ubuntu
+          wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y powershell
+
+      - name: Convert SSH key to PPK (optional)
+        run: |
+          # Конвертируем OpenSSH ключ в формат, совместимый с plink (опционально)
+          # Для Linux будем использовать стандартный SSH
+          echo "Using standard SSH on Linux"
+
+      - name: Deploy Ceres via AI-hand
+        env:
+          SERVER_HOST: ${{ github.event.inputs.server_host || secrets.DEPLOY_HOST }}
+          SERVER_USER: ${{ secrets.DEPLOY_USER || 'root' }}
+          GITHUB_REPO: ${{ env.CERES_REPO }}
+          BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
+          DOMAIN: ${{ github.event.inputs.domain || 'ceres.local' }}
+        run: |
+          cd ai-hand
+          
+          # Адаптируем скрипт для Linux (используем SSH вместо plink)
+          cat > deploy-linux.sh << 'DEPLOY_SCRIPT'
+          #!/bin/bash
+          set -e
+          
+          SERVER_HOST="${SERVER_HOST}"
+          SERVER_USER="${SERVER_USER}"
+          GITHUB_REPO="${GITHUB_REPO}"
+          BRANCH="${BRANCH}"
+          DOMAIN="${DOMAIN}"
+          DEPLOY_PATH="${DEPLOY_PATH:-/opt/ceres}"
+          
+          echo "============================================="
+          echo "   CERES Platform - GitHub Deployment"
+          echo "============================================="
+          echo ""
+          echo "🎯 Target: $SERVER_USER@$SERVER_HOST"
+          echo "📦 Repo:   $GITHUB_REPO"
+          echo "🌿 Branch: $BRANCH"
+          echo "📂 Path:   $DEPLOY_PATH"
+          echo "🌐 Domain: $DOMAIN"
+          echo ""
+          
+          # === STEP 1: Подключение и проверка ===
+          echo "🔌 [STEP 1/6] Connecting to server..."
+          ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "echo '✅ SSH connected'"
+          
+          # === STEP 2: Установка зависимостей ===
+          echo ""
+          echo "📦 [STEP 2/6] Installing dependencies..."
+          ssh "$SERVER_USER@$SERVER_HOST" << 'REMOTE_DEPS'
+          set -e
+          
+          # Установка базовых утилит
+          apt-get update -qq
+          apt-get install -y git curl wget nano htop ca-certificates gnupg lsb-release
+          
+          # Установка Docker если нет
+          if ! command -v docker &> /dev/null; then
+              echo "🐳 Installing Docker..."
+              curl -fsSL https://get.docker.com | sh
+              systemctl enable docker
+              systemctl start docker
+          else
+              echo "✅ Docker already installed"
+          fi
+          
+          # Установка Docker Compose
+          if ! docker compose version &> /dev/null; then
+              echo "🔧 Installing Docker Compose..."
+              COMPOSE_VERSION="v2.23.0"
+              curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+                   -o /usr/local/bin/docker-compose
+              chmod +x /usr/local/bin/docker-compose
+              ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+          else
+              echo "✅ Docker Compose already installed"
+          fi
+          
+          docker --version
+          docker compose version
+          REMOTE_DEPS
+          
+          # === STEP 3: Клонирование репозитория ===
+          echo ""
+          echo "📥 [STEP 3/6] Cloning Ceres from GitHub..."
+          ssh "$SERVER_USER@$SERVER_HOST" << REMOTE_CLONE
+          set -e
+          
+          if [ -d "$DEPLOY_PATH/.git" ]; then
+              echo "📂 Repository exists, updating..."
+              cd "$DEPLOY_PATH"
+              git fetch origin
+              git checkout "$BRANCH"
+              git reset --hard "origin/$BRANCH"
+              git pull origin "$BRANCH"
+          else
+              echo "📂 Cloning new repository..."
+              rm -rf "$DEPLOY_PATH"
+              git clone --branch "$BRANCH" "$GITHUB_REPO" "$DEPLOY_PATH"
+              cd "$DEPLOY_PATH"
+          fi
+          
+          echo "✅ Repository cloned/updated"
+          REMOTE_CLONE
+          
+          # === STEP 4: Настройка конфигурации ===
+          echo ""
+          echo "⚙️  [STEP 4/6] Configuring Ceres..."
+          ssh "$SERVER_USER@$SERVER_HOST" << REMOTE_CONFIG
+          set -e
+          cd "$DEPLOY_PATH"
+          
+          # Создаем .env
+          if [ ! -f .env ]; then
+              if [ -f .env.example ]; then
+                  cp .env.example .env
+                  echo "✅ .env created from example"
+              fi
+          fi
+          
+          # Обновляем домен
+          if [ -f .env ]; then
+              sed -i "s/DOMAIN=.*/DOMAIN=$DOMAIN/g" .env
+              echo "✅ DOMAIN updated"
+          fi
+          
+          # Делаем скрипты исполняемыми
+          chmod +x scripts/*.sh 2>/dev/null || true
+          chmod +x *.sh 2>/dev/null || true
+          
+          echo "✅ Configuration ready"
+          REMOTE_CONFIG
+          
+          # === STEP 5: Развертывание ===
+          echo ""
+          echo "🚀 [STEP 5/6] Deploying Ceres..."
+          ssh "$SERVER_USER@$SERVER_HOST" << 'REMOTE_DEPLOY'
+          set -e
+          cd "$DEPLOY_PATH"
+          
+          # Останавливаем старые контейнеры
+          docker-compose down 2>/dev/null || true
+          docker compose down 2>/dev/null || true
+          
+          # Запускаем новые
+          if [ -f docker-compose.yml ]; then
+              docker compose up -d --build || docker-compose up -d --build
+          elif [ -d config/compose ]; then
+              echo "📦 Using config/compose/"
+              docker compose -f config/compose/base.yml -f config/compose/apps.yml up -d --build || \
+              docker-compose -f config/compose/base.yml -f config/compose/apps.yml up -d --build
+          else
+              echo "⚠️  No docker-compose configuration found"
+              exit 1
+          fi
+          
+          echo "⏳ Waiting for services to initialize (30s)..."
+          sleep 30
+          
+          echo "✅ Deployment complete"
+          REMOTE_DEPLOY
+          
+          # === STEP 6: Проверка ===
+          echo ""
+          echo "🔍 [STEP 6/6] Verifying deployment..."
+          ssh "$SERVER_USER@$SERVER_HOST" << 'REMOTE_CHECK'
+          set -e
+          cd "$DEPLOY_PATH"
+          
+          echo "📊 Container status:"
+          docker compose ps 2>/dev/null || docker-compose ps 2>/dev/null || docker ps
+          
+          echo ""
+          echo "🌐 Open ports:"
+          netstat -tuln | grep LISTEN | grep -E ":(80|443|8080|3000|5000)" || echo "No standard ports found"
+          
+          echo ""
+          echo "📄 Recent logs (last 10 lines):"
+          docker compose logs --tail=10 2>/dev/null || docker-compose logs --tail=10 2>/dev/null || echo "Logs unavailable"
+          REMOTE_CHECK
+          
+          # === ФИНАЛ ===
+          echo ""
+          echo "============================================="
+          echo "   ✅ DEPLOYMENT COMPLETE!"
+          echo "============================================="
+          echo ""
+          echo "📍 Server:  $SERVER_HOST"
+          echo "📂 Path:    $DEPLOY_PATH"
+          echo "🌐 Domain:  $DOMAIN"
+          echo ""
+          echo "🔗 Access:"
+          echo "   http://$SERVER_HOST"
+          echo "   http://$DOMAIN"
+          echo ""
+          DEPLOY_SCRIPT
+          
+          chmod +x deploy-linux.sh
+          ./deploy-linux.sh
+
+      - name: Upload deployment logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs-${{ github.run_number }}
+          path: |
+            logs/
+            ./*.log
+          retention-days: 7
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment succeeded!"
+          else
+            echo "❌ Deployment failed!"
+            exit 1
+          fi
+
+  health-check:
+    name: Post-Deployment Health Check
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for services
+        run: sleep 60
+
+      - name: Check HTTP endpoint
+        run: |
+          SERVER_HOST="${{ github.event.inputs.server_host || secrets.DEPLOY_HOST }}"
+          
+          echo "🔍 Checking HTTP endpoint: http://$SERVER_HOST"
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://$SERVER_HOST" || echo "000")
+          
+          if [ "$HTTP_CODE" == "200" ] || [ "$HTTP_CODE" == "302" ]; then
+            echo "✅ Server is responding (HTTP $HTTP_CODE)"
+          else
+            echo "⚠️  Server returned HTTP $HTTP_CODE"
+          fi
+
+      - name: Check Docker containers
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ github.event.inputs.server_host || secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'root' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/ceres
+            echo "📊 Container status:"
+            docker compose ps || docker-compose ps || docker ps
+            
+            echo ""
+            echo "🔍 Health check:"
+            docker compose ps --format json | jq -r '.[] | "\(.Name): \(.State)"' 2>/dev/null || \
+            docker ps --format "{{.Names}}: {{.Status}}"
+

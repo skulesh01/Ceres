@@ -18,20 +18,8 @@ output "vm_details" {
 # ==========================================
 # IP Addresses
 # ==========================================
-output "core_vm_ip" {
-  description = "IP address of Core VM"
-  value       = proxmox_vm_qemu.ceres_vms["core"].default_ipv4_address
-}
-
-output "apps_vm_ip" {
-  description = "IP address of Apps VM"
-  value       = proxmox_vm_qemu.ceres_vms["apps"].default_ipv4_address
-}
-
-output "edge_vm_ip" {
-  description = "IP address of Edge VM"
-  value       = proxmox_vm_qemu.ceres_vms["edge"].default_ipv4_address
-}
+## Outputs for VM IPs are defined in main.tf via variables
+## to avoid duplicate definitions. Removing duplicates here.
 
 # ==========================================
 # Connection Information
