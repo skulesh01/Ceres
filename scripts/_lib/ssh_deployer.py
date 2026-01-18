@@ -175,15 +175,60 @@ class SSHDeployer:
             print(f"[ERROR] Directory upload failed: {e}")
             return False
     
-    def close(self):
-        """Close SSH connection"""
+    def get_remote_logs(self, remote_log_path: str, local_log_path: Path, follow: bool = False) -> bool:
+        """Fetch remote log file, optionally follow it
+        
+        Args:
+            remote_log_path: Full path on remote server (/opt/ceres/logs/deployment.log)
+            local_log_path: Where to save log locally
+            follow: If True, continuously stream new lines
+        """
         try:
-            if self.sftp:
-                self.sftp.close()
-            if self.ssh:
-                self.ssh.close()
+            self.sftp.get(remote_log_path, str(local_log_path))
+            
+            if follow:
+                # Stream log in real-time
+                print(f"\n>>> Tailing log from server: {remote_log_path}")
+                print("=" * 80)
+                
+                # Get initial size
+                info = self.sftp.stat(remote_log_path)
+                pos = info.st_size
+                
+                while True:
+                    try:
+                        # Check for new content
+                        info = self.sftp.stat(remote_log_path)
+                        if info.st_size > pos:
+                            # Download new content
+                            self.sftp.get(remote_log_path, str(local_log_path))
+                            
+                            # Read and print new lines
+                            with open(local_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                f.seek(pos)
+                                for line in f:
+                                    print(f"  {line.rstrip()}")
+                            
+                            pos = info.st_size
+                        
+                        time.sleep(2)  # Check every 2 seconds
+                    except Exception as e:
+                        if "RemoteFile" not in str(e):  # Expected when file doesn't exist yet
+                            break
+            
+            return True
+        except Exception as e:
+            print(f"[WARN] Could not retrieve log: {e}")
+            return False
+    
+    def setup_remote_logging(self, remote_dir: str) -> bool:
+        """Setup logging directory and initial log file on remote server"""
+        try:
+            self.run_command(f"mkdir -p {remote_dir}/logs && touch {remote_dir}/logs/deployment.log", show_output=False)
+            return True
         except Exception:
-            pass
+            return False
+    
 
 
 def create_project_archive(
@@ -268,7 +313,7 @@ def load_credentials(creds_file: Path) -> Dict:
         raise ValueError(f"Invalid JSON in credentials file: {e}")
 
 
-def print_deployment_summary(creds: Dict, server_ip: str, elapsed_seconds: int):
+def print_deployment_summary(creds: Dict, server_ip: str, elapsed_seconds: int, log_file: Path = None):
     """Print nice deployment completion summary"""
     minutes, seconds = divmod(elapsed_seconds, 60)
     
@@ -276,6 +321,9 @@ def print_deployment_summary(creds: Dict, server_ip: str, elapsed_seconds: int):
     print("                    ✓ DEPLOYMENT COMPLETED")
     print("=" * 80)
     print(f"\nTotal time: {minutes}m {seconds}s")
+    
+    if log_file and log_file.exists():
+        print(f"\nFull deployment log saved to: {log_file}")
     
     keycloak_pass = creds.get('services', {}).get('keycloak', {}).get('admin_password')
     grafana_pass = creds.get('services', {}).get('grafana', {}).get('admin_password')

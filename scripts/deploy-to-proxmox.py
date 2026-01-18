@@ -33,6 +33,11 @@ def test_connection(deployer: SSHDeployer) -> int:
 def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Path, remote_dir: str) -> int:
     start_time = time.time()
     
+    # Setup local logs directory
+    local_logs_dir = Path.home() / '.ceres' / 'logs'
+    local_logs_dir.mkdir(parents=True, exist_ok=True)
+    local_log_file = local_logs_dir / f"deploy-{int(start_time)}.log"
+    
     progress = ProgressBar()
     progress.add_stage("Connecting", 2)
     progress.add_stage("Uploading archive", 15)
@@ -46,18 +51,27 @@ def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Pa
     progress.update()
     
     print(f"\n>>> Preparing remote directory: {remote_dir}")
-    deployer.run_command(f"mkdir -p {remote_dir}", show_output=False)
+    deployer.run_command(f"mkdir -p {remote_dir}/logs && touch {remote_dir}/logs/deployment.log", show_output=False)
+    
+    # Log to both local file and remote
+    def log_msg(msg: str):
+        print(msg)
+        with open(local_log_file, 'a', encoding='utf-8') as f:
+            f.write(msg + '\n')
+        deployer.run_command(f"echo '{msg}' >> {remote_dir}/logs/deployment.log", show_output=False)
+    
+    log_msg(f"[{time.strftime('%H:%M:%S')}] Deployment started")
     
     try:
-        print("\n>>> Creating project archive...")
+        log_msg("\n>>> Creating project archive...")
         archive_path = create_project_archive(public_dir, private_dir)
     except Exception as e:
-        print(f"[ERROR] {e}")
+        log_msg(f"[ERROR] {e}")
         deployer.close()
         return 1
     
     progress.update()
-    print(f"\n>>> Uploading archive...")
+    log_msg(f"\n>>> Uploading archive...")
     remote_archive = f"{remote_dir}/ceres-project.tar.gz"
     if not deployer.upload_file(archive_path, remote_archive):
         deployer.close()
@@ -89,12 +103,18 @@ echo "Dependencies installed"
     progress.update()
     
     print("\n>>> Starting CERES deployment...\n")
-    deployer.run_command(f"cd {remote_dir} && python3 auto-deploy.py 2>&1 || python3 Ceres/scripts/auto-deploy.py 2>&1")
+    deployer.run_command(f"cd {remote_dir} && python3 auto-deploy.py 2>&1 >> {remote_dir}/logs/deployment.log || python3 Ceres/scripts/auto-deploy.py 2>&1 >> {remote_dir}/logs/deployment.log")
+    
+    # Download final logs
+    print("\n>>> Retrieving deployment logs from server...")
+    remote_log = f"{remote_dir}/logs/deployment.log"
+    deployer.get_remote_logs(remote_log, local_log_file, follow=False)
+    
     progress.update()
     progress.finish()
     
     elapsed = int(time.time() - start_time)
-    print_deployment_summary(creds, deployer.host, elapsed)
+    print_deployment_summary(creds, deployer.host, elapsed, local_log_file)
     deployer.close()
     return 0
 
