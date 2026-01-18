@@ -1,7 +1,8 @@
 ﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Deploy CERES to Proxmox Host with Progress Bar
+Deploy CERES to Proxmox Host via Git Clone
+Strategy: Clone project from GitHub, download dependencies on remote server
 """
 
 import sys
@@ -12,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / '_lib'))
 
 try:
-    from ssh_deployer import SSHDeployer, create_project_archive, load_credentials, print_deployment_summary, ProgressBar
+    from ssh_deployer import SSHDeployer, load_credentials, print_deployment_summary, ProgressBar
 except ImportError as e:
     print(f"[ERROR] Failed to import ssh_deployer: {e}")
     sys.exit(1)
@@ -30,7 +31,7 @@ def test_connection(deployer: SSHDeployer) -> int:
         return 1
 
 
-def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Path, remote_dir: str) -> int:
+def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
     start_time = time.time()
     
     # Setup local logs directory inside project
@@ -43,10 +44,9 @@ def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Pa
     progress = ProgressBar()
     progress.add_stage("Setup timezone", 1)
     progress.add_stage("Connecting", 2)
-    progress.add_stage("Uploading archive", 15)
-    progress.add_stage("Extracting files", 5)
+    progress.add_stage("Cloning from GitHub", 20)
     progress.add_stage("Installing deps", 15)
-    progress.add_stage("Running deploy", 63)
+    progress.add_stage("Running deploy", 62)
     
     progress.update()
     if not deployer.connect():
@@ -76,58 +76,41 @@ def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Pa
     log_msg(f"[{time.strftime('%H:%M:%S')}] Deployment started")
     
     try:
-        log_msg("\n>>> Creating project archive...")
-        archive_path = create_project_archive(public_dir, private_dir)
-        
-        # Show what we're about to upload
-        archive_size_mb = archive_path.stat().st_size / (1024 * 1024)
-        log_msg(f">>> Archive ready: {archive_path.name} ({archive_size_mb:.1f}MB)")
-        log_msg(f">>> Uploading to {deployer.host}:{remote_dir}/...")
+        # Clone project from GitHub (no history with --depth 1)
+        log_msg("\n>>> Cloning CERES project from GitHub...")
+        github_repo = "https://github.com/skulesh01/Ceres.git"
+        clone_cmd = f"cd {remote_dir} && git clone --depth 1 {github_repo} . 2>&1"
+        deployer.run_command(clone_cmd, show_output=True, stream_output=True)
+        log_msg("[OK] Project cloned successfully")
     except Exception as e:
-        log_msg(f"[ERROR] {e}")
+        log_msg(f"[ERROR] Git clone failed: {e}")
         deployer.close()
         return 1
     
     progress.update()
-    log_msg(f"\n>>> Uploading archive...")
-    remote_archive = f"{remote_dir}/ceres-project.tar.gz"
-    if not deployer.upload_file(archive_path, remote_archive):
-        deployer.close()
-        return 1
-    archive_path.unlink()
-    print("[OK] Archive uploaded")
-    progress.update()
     
-    print(f"\n>>> Extracting archive...")
-    deployer.run_command(f"cd {remote_dir} && tar -xzf ceres-project.tar.gz && rm ceres-project.tar.gz", show_output=False)
-    print("[OK] Archive extracted")
-    progress.update()
-    
-    print("\n>>> Installing dependencies...")
+    # Now run installation and deployment scripts
+    print("\n>>> Installing dependencies on remote server...")
     install_script = r'''
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq 2>&1 | tail -1
 apt-get install -y -qq python3 python3-pip git wget curl unzip gnupg lsb-release ca-certificates
-wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" > /etc/apt/sources.list.d/hashicorp.list
-apt-get update -qq && apt-get install -y -qq terraform
-python3 -m pip install --quiet ansible --disable-pip-version-check
 curl -fsSL https://get.docker.com | sh
-echo "Dependencies installed"
+python3 -m pip install --quiet paramiko docker --disable-pip-version-check
+echo "[OK] Dependencies installed"
 '''
-    if not deployer.run_command(install_script):
-        print("[WARN] Some dependencies may have failed")
-    print("[OK] Dependencies ready")
+    if not deployer.run_command(install_script, show_output=False):
+        log_msg("[WARN] Some dependencies may have failed, continuing...")
     progress.update()
     
-    print("\n>>> Starting CERES deployment orchestration...\n")
+    print("\n>>> Running deployment orchestration from cloned project...\n")
     print("=" * 80)
     print("LIVE OUTPUT FROM SERVER:")
     print("=" * 80 + "\n")
     
-    # Run with streaming output to see real-time logs
+    # Run deployment script from cloned project with streaming output
     deployer.run_command(
-        f"cd {remote_dir} && python3 auto-deploy.py 2>&1 | tee {remote_dir}/logs/deployment.log || python3 Ceres/scripts/auto-deploy.py 2>&1 | tee {remote_dir}/logs/deployment.log",
+        f"cd {remote_dir} && python3 auto-deploy.py 2>&1 | tee -a {remote_dir}/logs/deployment.log",
         show_output=True,
         stream_output=True
     )
@@ -149,7 +132,7 @@ echo "Dependencies installed"
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Deploy CERES to Proxmox host')
+    parser = argparse.ArgumentParser(description='Deploy CERES to Proxmox host via Git Clone')
     parser.add_argument('--test', action='store_true', help='Test SSH connection only')
     parser.add_argument('--config', type=Path, default=None, help='Path to credentials JSON file')
     parser.add_argument('--host', type=str, default=None, help='Override Proxmox host IP')
@@ -183,14 +166,11 @@ def main():
         return 1
     
     deployer = SSHDeployer(host, user, password)
-    script_dir = Path(__file__).parent
-    public_dir = script_dir.parent
-    private_dir = script_dir.parent.parent / 'Ceres-Private'
     
     if args.test:
         return test_connection(deployer)
     else:
-        return deploy(deployer, creds, public_dir, private_dir if private_dir.exists() else None, args.remote_dir)
+        return deploy(deployer, creds, args.remote_dir)
 
 
 if __name__ == '__main__':
@@ -202,3 +182,4 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"[ERROR] {e}")
         sys.exit(1)
+
