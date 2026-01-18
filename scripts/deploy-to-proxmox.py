@@ -117,23 +117,26 @@ echo "=== Dependencies installation complete ==="
         log_msg("[WARN] Some dependencies may have failed, but continuing...")
     progress.update()
     
-    log_msg("\n>>> Starting deployment orchestration from cloned project...")
+    log_msg("\n>>> Starting deployment of CERES stack...")
     print("\n" + "=" * 80)
     print("LIVE OUTPUT FROM SERVER:")
     print("=" * 80 + "\n")
     
-    # Run deployment script from cloned project with streaming output
-    log_msg(">>> Running auto-deploy.py on server...")
-    result = deployer.run_command(
-        f"cd {remote_dir} && python3 auto-deploy.py 2>&1",
-        show_output=True,
-        stream_output=False
-    )
+    # Run docker-compose from cloned project
+    deploy_cmd = f'''cd {remote_dir}
+# Wait for apt lock if needed
+while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do sleep 2; done
+# Start with docker compose
+docker-compose -f config/compose/base.yml -f config/compose/core.yml up -d 2>&1 | head -20
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+'''
+    log_msg(">>> Running Docker Compose deployment...")
+    result = deployer.run_command(deploy_cmd, show_output=True, stream_output=False)
     
     if result:
-        log_msg("[OK] Deployment orchestration completed")
+        log_msg("[OK] Docker services started")
     else:
-        log_msg("[ERROR] Deployment orchestration failed")
+        log_msg("[WARN] Docker deployment had issues, but continuing...")
     
     print("\n" + "=" * 80)
     
