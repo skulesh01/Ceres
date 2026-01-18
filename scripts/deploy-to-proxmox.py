@@ -59,7 +59,7 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
     progress.update()
     
     print(f"\n>>> Preparing remote directory: {remote_dir}")
-    deployer.run_command(f"mkdir -p {remote_dir}/logs && touch {remote_dir}/logs/deployment.log", show_output=False)
+    deployer.run_command(f"rm -rf {remote_dir}/* 2>/dev/null; mkdir -p {remote_dir}/logs && touch {remote_dir}/logs/deployment.log", show_output=False)
     
     # Log to both local file and remote with timestamp
     def log_msg(msg: str):
