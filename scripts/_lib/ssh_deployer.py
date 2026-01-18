@@ -101,6 +101,59 @@ class ProgressBar:
         print()  # Newline
 
 
+class UploadProgressBar:
+    """Progress bar for file upload with speed and ETA"""
+    
+    def __init__(self, total_size: int, filename: str = "file"):
+        self.total_size = total_size
+        self.transferred = 0
+        self.start_time = time.time()
+        self.filename = filename
+        self.width = 50
+    
+    def update(self, bytes_transferred: int):
+        """Update progress - called by paramiko during upload"""
+        self.transferred = bytes_transferred
+        elapsed = time.time() - self.start_time
+        
+        # Calculate progress
+        progress = min(1.0, self.transferred / self.total_size) if self.total_size > 0 else 0.0
+        filled = int(self.width * progress)
+        bar = '█' * filled + '░' * (self.width - filled)
+        percent = int(progress * 100)
+        
+        # Calculate speed and ETA
+        if elapsed > 0.5:  # Wait at least 0.5s for reliable speed
+            speed_bps = self.transferred / elapsed
+            speed_mbps = speed_bps / (1024 * 1024)
+            
+            if speed_bps > 0:
+                remaining_bytes = self.total_size - self.transferred
+                remaining_secs = remaining_bytes / speed_bps
+                eta_min, eta_sec = divmod(int(remaining_secs), 60)
+            else:
+                speed_mbps = 0
+                eta_min, eta_sec = 0, 0
+        else:
+            speed_mbps = 0
+            eta_min, eta_sec = 0, 0
+        
+        size_mb = self.total_size / (1024 * 1024)
+        transferred_mb = self.transferred / (1024 * 1024)
+        
+        # Print on same line
+        sys.stdout.write(
+            f"\r[{bar}] {percent:3d}% | {transferred_mb:.1f}/{size_mb:.1f}MB "
+            f"| {speed_mbps:.1f} MB/s | ETA {eta_min}m {eta_sec}s"
+        )
+        sys.stdout.flush()
+    
+    def finish(self):
+        """Print newline when complete"""
+        self.update(self.total_size)
+        print()  # Newline
+
+
 class SSHDeployer:
     """SSH deployment helper with archive, upload, execute capabilities"""
     
@@ -223,14 +276,31 @@ class SSHDeployer:
             print(f"[WARN] Failed to setup timezone: {e}")
             return False
     
-    def upload_file(self, local_path: Path, remote_path: str) -> bool:
-        """Upload file to remote server"""
+    def upload_file(self, local_path: Path, remote_path: str, show_progress: bool = True) -> bool:
+        """Upload file to remote server with optional progress bar
+        
+        Args:
+            local_path: Local file path
+            remote_path: Remote destination path
+            show_progress: Show progress bar for large files (>10MB)
+        """
         try:
             if not self.sftp:
                 print("[ERROR] SFTP not available")
                 return False
             
-            self.sftp.put(str(local_path), remote_path)
+            file_size = local_path.stat().st_size
+            filename = local_path.name
+            
+            # Show progress bar only for large files
+            if show_progress and file_size > 10 * 1024 * 1024:  # > 10MB
+                print(f"\n>>> Uploading {filename} ({file_size / (1024*1024):.1f}MB)...")
+                progress = UploadProgressBar(file_size, filename)
+                self.sftp.put(str(local_path), remote_path, callback=progress.update)
+                progress.finish()
+            else:
+                self.sftp.put(str(local_path), remote_path)
+            
             return True
         except Exception as e:
             print(f"[ERROR] File upload failed: {e}")
