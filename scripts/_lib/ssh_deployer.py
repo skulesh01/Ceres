@@ -64,10 +64,14 @@ class ProgressBar:
         percent = int(progress * 100)
         stage = self.stages[self.current_stage]['name'] if self.current_stage < len(self.stages) else 'Done'
         
+        # Ensure elapsed is int
+        elapsed = int(elapsed)
+        
         # Estimate remaining time
-        if progress > 0:
+        if progress > 0.01:
             total_time = elapsed / progress
             remaining = int(total_time - elapsed)
+            remaining = max(0, remaining)
             eta = f"{remaining // 60}m {remaining % 60}s"
         else:
             eta = "calculating..."
@@ -123,13 +127,18 @@ class SSHDeployer:
             # Use bash -lc to support multi-line and environment
             chan.exec_command(f"bash -lc '{cmd}'")
             
-            stdout = chan.makefile('r', encoding='utf-8')
-            stderr = chan.makefile_stderr('r', encoding='utf-8')
+            stdout = chan.makefile('r')
+            stderr = chan.makefile_stderr('r')
             
             if show_output:
                 for line in stdout:
+                    # Decode if bytes
+                    if isinstance(line, bytes):
+                        line = line.decode('utf-8', errors='ignore')
                     print(f"  {line.rstrip()}")
                 for line in stderr:
+                    if isinstance(line, bytes):
+                        line = line.decode('utf-8', errors='ignore')
                     if line.strip():
                         print(f"  [ERR] {line.rstrip()}")
             
