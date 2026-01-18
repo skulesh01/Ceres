@@ -86,12 +86,16 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
         
         # Clean up any previous clone
         if local_clone_dir.exists():
-            shutil.rmtree(local_clone_dir)
-        local_clone_dir.mkdir(parents=True)
+            shutil.rmtree(local_clone_dir, ignore_errors=True)
         
-        # Clone locally
+        # Clone locally (Git will create the directory)
         clone_cmd = f"git clone --depth 1 {github_repo} {local_clone_dir}"
-        os.system(clone_cmd)
+        clone_result = os.system(clone_cmd)
+        
+        if clone_result != 0:
+            log_msg(f"[ERROR] Git clone failed with code {clone_result}")
+            deployer.close()
+            return 1
         
         if (local_clone_dir / "config" / "compose").exists():
             log_msg("[OK] Project cloned locally")
