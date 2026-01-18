@@ -1,0 +1,184 @@
+# Example GitLab CI/CD Pipeline for Node.js Application
+# Place this file in your project root as .gitlab-ci.yml
+
+stages:
+  - test
+  - build
+  - deploy
+  - notify
+
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  DOCKER_LATEST: $CI_REGISTRY_IMAGE:latest
+
+# ==========================================
+# STAGE 1: Test
+# ==========================================
+test:unit:
+  stage: test
+  image: node:18
+  before_script:
+    - npm ci
+  script:
+    - npm run test
+    - npm run lint
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
+  artifacts:
+    reports:
+      junit: test-results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+  only:
+    - branches
+    - merge_requests
+
+# Security scanning
+test:security:
+  stage: test
+  image: node:18
+  script:
+    - npm audit --production
+  allow_failure: true
+
+# ==========================================
+# STAGE 2: Build
+# ==========================================
+build:docker:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $DOCKER_IMAGE .
+    - docker tag $DOCKER_IMAGE $DOCKER_LATEST
+    - docker push $DOCKER_IMAGE
+    - docker push $DOCKER_LATEST
+  only:
+    - main
+    - develop
+
+# Build artifacts for static sites
+build:static:
+  stage: build
+  image: node:18
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 day
+  only:
+    - main
+
+# ==========================================
+# STAGE 3: Deploy
+# ==========================================
+deploy:staging:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    # Deploy via Portainer API
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "env": [
+            {"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"}
+          ],
+          "prune": true
+        }'
+  environment:
+    name: staging
+    url: https://staging.ceres
+  only:
+    - develop
+
+deploy:production:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${PROD_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "env": [
+            {"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"}
+          ],
+          "prune": true
+        }'
+  environment:
+    name: production
+    url: https://app.ceres
+  when: manual
+  only:
+    - main
+
+# Auto-close related issues
+deploy:close-issues:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      ISSUES=$(git log -1 --pretty=%B | grep -oP '(?<=#)\d+' || echo "")
+      if [ -n "$ISSUES" ]; then
+        for ISSUE in $ISSUES; do
+          curl -X PUT "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/issues/${ISSUE}" \
+            -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+            -d "state_event=close" \
+            -d "labels=deployed"
+          echo "✅ Closed issue #$ISSUE"
+        done
+      fi
+  only:
+    - main
+
+# ==========================================
+# STAGE 4: Notify
+# ==========================================
+notify:zulip:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    - |
+      STATUS="✅ Success"
+      COLOR="green"
+      if [ "$CI_JOB_STATUS" != "success" ]; then
+        STATUS="❌ Failed"
+        COLOR="red"
+      fi
+      
+      curl -X POST "https://zulip.ceres/api/v1/messages" \
+        -u "${ZULIP_BOT_EMAIL}:${ZULIP_BOT_API_KEY}" \
+        -d "type=stream" \
+        -d "to=deployments" \
+        -d "topic=${CI_PROJECT_NAME}" \
+        -d "content=$STATUS Pipeline **${CI_PIPELINE_ID}** for **${CI_COMMIT_REF_NAME}** by @${CI_COMMIT_AUTHOR}
+
+**Commit:** ${CI_COMMIT_SHORT_SHA} - ${CI_COMMIT_TITLE}
+**Duration:** ${CI_JOB_DURATION}s
+**Pipeline:** ${CI_PIPELINE_URL}"
+  when: always
+
+# Upload artifacts to Nextcloud
+notify:artifacts:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    - |
+      tar czf dist-${CI_COMMIT_SHORT_SHA}.tar.gz dist/
+      curl -X PUT "https://nextcloud.ceres/remote.php/dav/files/admin/ci-artifacts/${CI_PROJECT_NAME}/${CI_COMMIT_SHORT_SHA}.tar.gz" \
+        -u "admin:${NEXTCLOUD_ADMIN_PASSWORD}" \
+        --data-binary @dist-${CI_COMMIT_SHORT_SHA}.tar.gz
+      echo "✅ Artifacts uploaded to Nextcloud"
+  only:
+    - main
+  when: on_success

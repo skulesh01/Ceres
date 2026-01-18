@@ -1,0 +1,149 @@
+# Generic Docker Build & Deploy Pipeline
+# Works for any Dockerized application
+
+stages:
+  - build
+  - test
+  - security
+  - deploy
+
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  DOCKER_LATEST: $CI_REGISTRY_IMAGE:latest
+
+# ==========================================
+# Build Docker Image
+# ==========================================
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build --build-arg COMMIT_SHA=$CI_COMMIT_SHORT_SHA -t $DOCKER_IMAGE .
+    - docker tag $DOCKER_IMAGE $DOCKER_LATEST
+    - docker push $DOCKER_IMAGE
+    - docker push $DOCKER_LATEST
+  only:
+    - branches
+
+# ==========================================
+# Test Container
+# ==========================================
+test:container:
+  stage: test
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker pull $DOCKER_IMAGE
+    - docker run --rm $DOCKER_IMAGE --version || docker run --rm $DOCKER_IMAGE echo "Container works!"
+  only:
+    - branches
+
+# ==========================================
+# Security Scanning
+# ==========================================
+security:trivy:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy image --severity HIGH,CRITICAL --exit-code 0 $DOCKER_IMAGE
+  allow_failure: true
+
+security:hadolint:
+  stage: security
+  image: hadolint/hadolint:latest-alpine
+  script:
+    - hadolint Dockerfile || true
+  allow_failure: true
+
+# ==========================================
+# Deploy to Staging
+# ==========================================
+deploy:staging:
+  stage: deploy
+  image: curlimages/curl:latest
+  variables:
+    DEPLOY_ENV: staging
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${STAGING_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "env": [
+            {"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"},
+            {"name": "ENVIRONMENT", "value": "staging"}
+          ],
+          "prune": true
+        }'
+  environment:
+    name: staging
+    url: https://staging.ceres
+  only:
+    - develop
+
+# ==========================================
+# Deploy to Production
+# ==========================================
+deploy:production:
+  stage: deploy
+  image: curlimages/curl:latest
+  variables:
+    DEPLOY_ENV: production
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${PROD_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "env": [
+            {"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"},
+            {"name": "ENVIRONMENT", "value": "production"}
+          ],
+          "prune": true
+        }'
+    # Notify Zulip
+    - |
+      curl -X POST "https://zulip.ceres/api/v1/messages" \
+        -u "${ZULIP_BOT_EMAIL}:${ZULIP_BOT_API_KEY}" \
+        -d "type=stream" \
+        -d "to=deployments" \
+        -d "topic=${CI_PROJECT_NAME}" \
+        -d "content=🚀 **Deployed to Production!**
+        
+**Project:** ${CI_PROJECT_NAME}
+**Commit:** ${CI_COMMIT_SHORT_SHA} - ${CI_COMMIT_TITLE}
+**Author:** ${CI_COMMIT_AUTHOR}
+**Image:** ${DOCKER_IMAGE}
+**Pipeline:** ${CI_PIPELINE_URL}"
+  environment:
+    name: production
+    url: https://app.ceres
+    on_stop: stop:production
+  when: manual
+  only:
+    - main
+
+# ==========================================
+# Stop Production (Rollback)
+# ==========================================
+stop:production:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${PROD_STACK_ID}/stop" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}"
+    - echo "⚠️ Production stopped! Deploy previous version to restore."
+  environment:
+    name: production
+    action: stop
+  when: manual
+  only:
+    - main

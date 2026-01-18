@@ -1,0 +1,236 @@
+---
+# ==========================================
+# Ansible Playbook - CERES Full Stack Deploy
+# ==========================================
+
+- name: Deploy CERES Platform
+  hosts: ceres_servers
+  become: yes
+  vars:
+    docker_compose_version: "2.23.0"
+    ceres_base_dir: "/opt/ceres"
+    backup_dir: "/backup/ceres"
+  
+  tasks:
+    # ==========================================
+    # System Preparation
+    # ==========================================
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - git
+          - python3-pip
+          - ufw
+        state: present
+      when: ansible_os_family == "Debian"
+
+    # ==========================================
+    # Docker Installation
+    # ==========================================
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # ==========================================
+    # Firewall Configuration
+    # ==========================================
+    - name: Configure UFW - Allow SSH
+      ufw:
+        rule: allow
+        port: '22'
+        proto: tcp
+
+    - name: Configure UFW - Allow HTTP
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+
+    - name: Configure UFW - Allow HTTPS
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+
+    - name: Configure UFW - Allow WireGuard
+      ufw:
+        rule: allow
+        port: '51820'
+        proto: udp
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        policy: deny
+
+    # ==========================================
+    # CERES Deployment
+    # ==========================================
+    - name: Create CERES directory
+      file:
+        path: "{{ ceres_base_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Clone CERES repository
+      git:
+        repo: 'https://github.com/yourorg/ceres.git'
+        dest: "{{ ceres_base_dir }}"
+        version: main
+        force: yes
+
+    - name: Copy environment file
+      template:
+        src: templates/ceres.env.j2
+        dest: "{{ ceres_base_dir }}/config/.env"
+        mode: '0600'
+
+    - name: Create Docker network
+      docker_network:
+        name: ceres_net
+        state: present
+
+    - name: Deploy Core Services
+      docker_compose:
+        project_src: "{{ ceres_base_dir }}"
+        files:
+          - config/compose/base.yml
+          - config/compose/core.yml
+        state: present
+        pull: yes
+
+    - name: Wait for PostgreSQL
+      wait_for:
+        host: localhost
+        port: 5432
+        delay: 10
+        timeout: 60
+
+    - name: Wait for Redis
+      wait_for:
+        host: localhost
+        port: 6379
+        delay: 5
+        timeout: 30
+
+    - name: Deploy Application Services
+      docker_compose:
+        project_src: "{{ ceres_base_dir }}"
+        files:
+          - config/compose/gitlab.yml
+          - config/compose/zulip.yml
+          - config/compose/apps.yml
+        state: present
+        pull: yes
+
+    - name: Deploy Monitoring Services
+      docker_compose:
+        project_src: "{{ ceres_base_dir }}"
+        files:
+          - config/compose/monitoring.yml
+          - config/compose/monitoring-exporters.yml
+        state: present
+        pull: yes
+
+    - name: Deploy Edge Services
+      docker_compose:
+        project_src: "{{ ceres_base_dir }}"
+        files:
+          - config/compose/edge.yml
+        state: present
+        pull: yes
+
+    # ==========================================
+    # Post-Deployment Configuration
+    # ==========================================
+    - name: Run Keycloak bootstrap
+      command: "{{ ceres_base_dir }}/scripts/keycloak-bootstrap-full.ps1"
+      args:
+        chdir: "{{ ceres_base_dir }}"
+      environment:
+        KEYCLOAK_ADMIN_PASSWORD: "{{ keycloak_admin_password }}"
+
+    - name: Setup webhooks
+      command: "{{ ceres_base_dir }}/scripts/setup-webhooks.ps1"
+      args:
+        chdir: "{{ ceres_base_dir }}"
+
+    # ==========================================
+    # Backup Configuration
+    # ==========================================
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: Setup backup cron job
+      cron:
+        name: "CERES daily backup"
+        minute: "0"
+        hour: "2"
+        job: "cd {{ ceres_base_dir }} && ./scripts/backup-full.ps1 >> /var/log/ceres-backup.log 2>&1"
+        user: root
+
+    # ==========================================
+    # Health Check
+    # ==========================================
+    - name: Run health check
+      command: "{{ ceres_base_dir }}/scripts/health-check.ps1"
+      args:
+        chdir: "{{ ceres_base_dir }}"
+      register: health_check_result
+
+    - name: Display health check results
+      debug:
+        var: health_check_result.stdout_lines
+
+    # ==========================================
+    # Summary
+    # ==========================================
+    - name: Deployment summary
+      debug:
+        msg:
+          - "✅ CERES Platform deployed successfully!"
+          - "📍 Base directory: {{ ceres_base_dir }}"
+          - "🔐 Keycloak: https://auth.{{ domain }}"
+          - "🦊 GitLab: https://gitlab.{{ domain }}"
+          - "💬 Zulip: https://zulip.{{ domain }}"
+          - "📊 Grafana: https://grafana.{{ domain }}"

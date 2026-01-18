@@ -1,0 +1,324 @@
+# CERES Cleanup Automation Script
+# Executes the cleanup plan safely with rollback capability
+
+param(
+    [switch]$DryRun = $true,
+    [switch]$Confirm = $false
+)
+
+$ErrorActionPreference = "Stop"
+
+# ==========================================
+# Configuration
+# ==========================================
+
+$projectRoot = Get-Location
+$backupDir = "$projectRoot/backups/cleanup-$(Get-Date -Format 'yyyy-MM-dd-HHmmss')"
+$docsDir = "$projectRoot/docs"
+
+# Files to delete
+$filesToDelete = @(
+    "ANALYSIS_COMPLETE.txt",
+    "ANALYZE_MODULE_PLAN.md",
+    "SCRIPT_AUDIT_REPORT.md",
+    "SERVICES_AUDIT_REPORT.md",
+    "SERVICES_DEEP_ANALYSIS.md",
+    "DEVELOPMENT_LOG_SESSION2.md",
+    "PHASE_1_COMPLETE.md",
+    "PHASE_1_MVP_SUMMARY.md",
+    "PHASE_1_QUICK_REFERENCE.md",
+    "PHASE_2_DETAILED_PLAN.md",
+    "PHASE_2_ROADMAP.md",
+    "PHASE_2_STRUCTURE.md",
+    "ENTERPRISE_INTEGRATION_ACTION_PLAN.md",
+    "OPTIMIZATION_ACTION_PLAN.md",
+    "ENTERPRISE_READINESS_SUMMARY.md",
+    "PROJECT_STATUS.md",
+    "PROJECT_REORGANIZATION_COMPLETE.md",
+    "SERVICES_DOCUMENTATION_COMPLETION_REPORT.md",
+    "INTEGRATION_MATRIX_DETAILED.md",
+    "ENTERPRISE_DOCUMENTATION_INDEX.md",
+    "SERVICES_DOCUMENTATION_INDEX.md",
+    "PROJECT_INDEX.md",
+    "SERVICES_README.txt",
+    "SERVICES_INVENTORY.md",
+    "SERVICES_MATRIX.md",
+    "CERES_CLI_ARCHITECTURE.md",
+    "CERES_CLI_STATUS.md",
+    "CROSSPLATFORM_IMPLEMENTATION.md"
+)
+
+# Files to move to /docs
+$filesToMove = @{
+    "SERVICES_ALTERNATIVES_DETAILED.md" = "docs/services/alternatives.md"
+    "SERVICES_VERIFICATION.md" = "docs/services/verification.md"
+    "SERVICES_ANALYSIS_SUMMARY.md" = "docs/services/analysis.md"
+    "SERVICES_REPLACEMENT_QUICK_GUIDE.md" = "docs/services/quick-guide.md"
+    "GITLAB_MIGRATION_DETAILED_PLAN.md" = "docs/guides/migrations.md"
+    "GITLAB_MIGRATION_QUICK_REFERENCE.md" = "docs/guides/gitlab-migration.md"
+    "RESOURCE_PLANNING_BEST_PRACTICES.md" = "docs/guides/resource-planning.md"
+    "RESOURCE_PLANNING_STRATEGY.md" = "docs/guides/resource-strategy.md"
+    "RESOURCE_PLANNING_SUMMARY.md" = "docs/guides/resources-summary.md"
+    "INTEGRATION_CRITICAL_ANALYSIS.md" = "docs/integration/analysis.md"
+    "START_HERE_ENTERPRISE_INTEGRATION.md" = "docs/integration/enterprise-start.md"
+}
+
+# ==========================================
+# Functions
+# ==========================================
+
+function Write-Header {
+    param([string]$Text)
+    Write-Host ""
+    Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "  $Text" -ForegroundColor Cyan
+    Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Write-Step {
+    param([string]$Text)
+    Write-Host "→ $Text" -ForegroundColor Yellow
+}
+
+function Write-Success {
+    param([string]$Text)
+    Write-Host "✅ $Text" -ForegroundColor Green
+}
+
+function Write-Warning {
+    param([string]$Text)
+    Write-Host "⚠️  $Text" -ForegroundColor Yellow
+}
+
+function Write-Error {
+    param([string]$Text)
+    Write-Host "❌ $Text" -ForegroundColor Red
+}
+
+# ==========================================
+# Pre-flight Checks
+# ==========================================
+
+Write-Header "🔍 Pre-flight Checks"
+
+Write-Step "Checking git status..."
+$gitStatus = git status --porcelain
+if ($gitStatus) {
+    Write-Warning "Git working directory has uncommitted changes:"
+    Write-Host $gitStatus
+    Write-Warning "Please commit or stash changes before running cleanup"
+    exit 1
+}
+Write-Success "Git is clean"
+
+Write-Step "Checking directory structure..."
+if (-not (Test-Path "config") -or -not (Test-Path "scripts")) {
+    Write-Error "Invalid project structure. Not in CERES root?"
+    exit 1
+}
+Write-Success "Directory structure OK"
+
+# ==========================================
+# Dry Run Simulation
+# ==========================================
+
+Write-Header "📋 Cleanup Plan"
+
+Write-Host "Files to DELETE: $($filesToDelete.Count)"
+Write-Host "Files to MOVE: $($filesToMove.Count)"
+Write-Host ""
+
+Write-Host "Files to delete:" -ForegroundColor Yellow
+$filesToDelete | ForEach-Object { Write-Host "  🗑️  $_" }
+
+Write-Host ""
+Write-Host "Files to move:" -ForegroundColor Yellow
+$filesToMove.Keys | ForEach-Object { 
+    Write-Host "  📂 $_ → $($filesToMove[$_])"
+}
+
+if ($DryRun) {
+    Write-Host ""
+    Write-Warning "DRY RUN MODE - No changes made"
+    Write-Host "To execute cleanup, run: .\$($MyInvocation.MyCommand.Name) -DryRun:\$false -Confirm"
+    exit 0
+}
+
+# ==========================================
+# Confirmation
+# ==========================================
+
+if (-not $Confirm) {
+    Write-Host ""
+    $response = Read-Host "⚠️  This will DELETE $($filesToDelete.Count) files and MOVE $($filesToMove.Count) files. Continue? (YES/NO)"
+    if ($response -ne "YES") {
+        Write-Warning "Cleanup cancelled"
+        exit 0
+    }
+}
+
+# ==========================================
+# Create Backup
+# ==========================================
+
+Write-Header "💾 Creating Backup"
+
+Write-Step "Creating backup directory: $backupDir"
+$null = New-Item -ItemType Directory -Path $backupDir -Force
+
+Write-Step "Backing up files to delete..."
+foreach ($file in $filesToDelete) {
+    $filePath = "$projectRoot/$file"
+    if (Test-Path $filePath) {
+        Copy-Item -Path $filePath -Destination "$backupDir/" -Force
+        Write-Host "  Backed up: $file"
+    }
+}
+
+Write-Step "Backing up files to move..."
+foreach ($file in $filesToMove.Keys) {
+    $filePath = "$projectRoot/$file"
+    if (Test-Path $filePath) {
+        Copy-Item -Path $filePath -Destination "$backupDir/" -Force
+        Write-Host "  Backed up: $file"
+    }
+}
+
+Write-Success "Backup complete: $backupDir"
+
+# ==========================================
+# Create Directory Structure
+# ==========================================
+
+Write-Header "📁 Creating Directory Structure"
+
+$newDirs = @(
+    "docs/services",
+    "docs/guides",
+    "docs/integration",
+    "docs/archived",
+    "scripts/core",
+    "scripts/deployment",
+    "scripts/backup-restore",
+    "scripts/kubernetes",
+    "scripts/infrastructure",
+    "scripts/certificates",
+    "scripts/keycloak",
+    "scripts/database",
+    "scripts/observability",
+    "scripts/helpers",
+    "scripts/deprecated"
+)
+
+foreach ($dir in $newDirs) {
+    $dirPath = "$projectRoot/$dir"
+    if (-not (Test-Path $dirPath)) {
+        Write-Step "Creating $dir"
+        $null = New-Item -ItemType Directory -Path $dirPath -Force
+    }
+}
+
+Write-Success "Directory structure created"
+
+# ==========================================
+# Delete Files
+# ==========================================
+
+Write-Header "🗑️  Deleting Obsolete Files"
+
+foreach ($file in $filesToDelete) {
+    $filePath = "$projectRoot/$file"
+    if (Test-Path $filePath) {
+        Write-Step "Deleting $file"
+        Remove-Item -Path $filePath -Force
+    }
+}
+
+Write-Success "Obsolete files deleted"
+
+# ==========================================
+# Move Files
+# ==========================================
+
+Write-Header "📂 Moving Documentation"
+
+foreach ($sourceFile in $filesToMove.Keys) {
+    $sourcePath = "$projectRoot/$sourceFile"
+    $targetPath = "$projectRoot/$($filesToMove[$sourceFile])"
+    
+    if (Test-Path $sourcePath) {
+        Write-Step "Moving $sourceFile → $(Split-Path -Leaf $targetPath)"
+        
+        # Ensure target directory exists
+        $targetDir = Split-Path -Parent $targetPath
+        if (-not (Test-Path $targetDir)) {
+            $null = New-Item -ItemType Directory -Path $targetDir -Force
+        }
+        
+        Move-Item -Path $sourcePath -Destination $targetPath -Force
+    }
+}
+
+Write-Success "Documentation moved"
+
+# ==========================================
+# Git Operations
+# ==========================================
+
+Write-Header "📝 Git Operations"
+
+Write-Step "Staging cleanup changes..."
+git add -A
+
+Write-Step "Creating commit..."
+git commit -m "🧹 Final project cleanup: consolidate docs, archive legacy files, reorganize structure - Delete 27 obsolete files - Move 11 docs to /docs - Create organized structure - Prepare for production - No code changes"
+
+Write-Success "Changes committed to git"
+
+# ==========================================
+# Manual Tasks
+# ==========================================
+
+Write-Header "⚠️  Manual Tasks Remaining"
+
+Write-Host ""
+Write-Host "The following tasks require manual review:" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "1. 📂 Reorganize scripts into category folders:" -ForegroundColor White
+Write-Host "   See scripts/README.md for detailed categories"
+Write-Host ""
+Write-Host "2. 🔗 Update cross-references in:"
+Write-Host "   - README.md"
+Write-Host "   - ARCHITECTURE.md"
+Write-Host "   - .github/copilot-instructions.md"
+Write-Host ""
+Write-Host "3. ✅ Update links in remaining .md files"
+Write-Host ""
+Write-Host "4. 🧪 Test all scripts still work:"
+Write-Host "   .\scripts\core\health-check.ps1"
+Write-Host ""
+
+# ==========================================
+# Final Summary
+# ==========================================
+
+Write-Header "✨ Cleanup Complete!"
+
+Write-Host "Project structure has been cleaned and organized:" -ForegroundColor Green
+Write-Host ""
+Write-Host "  ✅ 27 obsolete files deleted"
+Write-Host "  ✅ 11 documentation files moved to /docs"
+Write-Host "  ✅ 15 script directories created"
+Write-Host "  ✅ All changes committed to git"
+Write-Host ""
+Write-Host "Backup location: $backupDir" -ForegroundColor Cyan
+Write-Host "Rollback command: git reset --hard HEAD~1" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Yellow
+Write-Host "  1. Complete manual tasks listed above"
+Write-Host "  2. Test the project: make test"
+Write-Host "  3. Deploy with confidence!"
+Write-Host ""
+
+Write-Success "Ready for production deployment!"

@@ -1,0 +1,118 @@
+{
+  "version": "1.0",
+  "name": "Medium",
+  "description": "Standard team, 3 VMs, 10 CPU, 20 GB RAM (RECOMMENDED)",
+  "deployment": {
+    "type": "kubernetes-proxmox",
+    "ha": false,
+    "environment": "production"
+  },
+  "virtual_machines": [
+    {
+      "id": 1,
+      "name": "core",
+      "ip": "192.168.1.10",
+      "cpu": 4,
+      "ram_gb": 8,
+      "disk_gb": 50,
+      "services": [
+        "postgresql",
+        "redis",
+        "keycloak"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "apps",
+      "ip": "192.168.1.11",
+      "cpu": 4,
+      "ram_gb": 8,
+      "disk_gb": 80,
+      "services": [
+        "nextcloud",
+        "gitea",
+        "mattermost",
+        "redmine",
+        "wikijs"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "edge",
+      "ip": "192.168.1.12",
+      "cpu": 2,
+      "ram_gb": 4,
+      "disk_gb": 40,
+      "services": [
+        "caddy",
+        "prometheus",
+        "grafana",
+        "portainer",
+        "uptime-kuma"
+      ]
+    }
+  ],
+  "resource_allocation": {
+    "postgresql": {
+      "cpu_limit": "1.5",
+      "memory_limit": "2G",
+      "memory_reservation": "1G"
+    },
+    "redis": {
+      "cpu_limit": "1.0",
+      "memory_limit": "1G",
+      "memory_reservation": "512M"
+    },
+    "keycloak": {
+      "cpu_limit": "1.5",
+      "memory_limit": "1.5G",
+      "memory_reservation": "1G"
+    },
+    "nextcloud": {
+      "cpu_limit": "1.5",
+      "memory_limit": "1.5G",
+      "memory_reservation": "1G"
+    },
+    "gitea": {
+      "cpu_limit": "1.0",
+      "memory_limit": "1G",
+      "memory_reservation": "512M"
+    },
+    "mattermost": {
+      "cpu_limit": "1.0",
+      "memory_limit": "1G",
+      "memory_reservation": "512M"
+    },
+    "redmine": {
+      "cpu_limit": "0.75",
+      "memory_limit": "800M",
+      "memory_reservation": "400M"
+    },
+    "prometheus": {
+      "cpu_limit": "1.0",
+      "memory_limit": "1G",
+      "memory_reservation": "512M"
+    },
+    "grafana": {
+      "cpu_limit": "0.75",
+      "memory_limit": "800M",
+      "memory_reservation": "512M"
+    }
+  },
+  "optional_modules": {
+    "vpn": false,
+    "mail": false,
+    "edms": false,
+    "loki": true
+  },
+  "estimated_cost": {
+    "provider": "hetzner",
+    "monthly_usd": 120,
+    "breakdown": {
+      "core_vm": 40,
+      "apps_vm": 40,
+      "edge_vm": 40
+    },
+    "notes": "3 VM on Hetzner Cloud"
+  }
+}

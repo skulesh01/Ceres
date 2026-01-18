@@ -1,0 +1,172 @@
+# Go Application CI/CD Pipeline
+# For microservices, APIs, CLI tools
+
+stages:
+  - test
+  - build
+  - security
+  - deploy
+  - notify
+
+variables:
+  GO_VERSION: "1.21"
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+# ==========================================
+# STAGE 1: Test & Lint
+# ==========================================
+test:unit:
+  stage: test
+  image: golang:${GO_VERSION}
+  before_script:
+    - go mod download
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  script:
+    - golangci-lint run ./...
+    - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+    - go tool cover -func=coverage.out
+  coverage: '/total:.*\s+(\d+\.\d+)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.out
+    expire_in: 1 week
+
+test:integration:
+  stage: test
+  image: golang:${GO_VERSION}
+  services:
+    - postgres:15
+    - redis:7
+  variables:
+    DATABASE_URL: postgresql://test:test@postgres:5432/test_db
+    REDIS_URL: redis://redis:6379/0
+  before_script:
+    - go mod download
+  script:
+    - go test -v -tags=integration ./...
+
+# ==========================================
+# STAGE 2: Build
+# ==========================================
+build:binary:
+  stage: build
+  image: golang:${GO_VERSION}
+  script:
+    - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o app
+    - ./app --version
+  artifacts:
+    paths:
+      - app
+    expire_in: 1 day
+
+build:docker:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    # Multi-stage build
+    - |
+      cat > Dockerfile <<'EOF'
+      FROM golang:1.21-alpine AS builder
+      WORKDIR /app
+      COPY go.mod go.sum ./
+      RUN go mod download
+      COPY . .
+      RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o app
+
+      FROM alpine:latest
+      RUN apk --no-cache add ca-certificates
+      WORKDIR /root/
+      COPY --from=builder /app/app .
+      EXPOSE 8080
+      CMD ["./app"]
+      EOF
+    - docker build -t $DOCKER_IMAGE .
+    - docker tag $DOCKER_IMAGE $CI_REGISTRY_IMAGE:latest
+    - docker push $DOCKER_IMAGE
+    - docker push $CI_REGISTRY_IMAGE:latest
+  only:
+    - main
+    - develop
+
+# ==========================================
+# STAGE 3: Security
+# ==========================================
+security:gosec:
+  stage: security
+  image: golang:${GO_VERSION}
+  before_script:
+    - go install github.com/securego/gosec/v2/cmd/gosec@latest
+  script:
+    - gosec -fmt json -out gosec-report.json ./...
+  artifacts:
+    paths:
+      - gosec-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+security:trivy:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy image --severity HIGH,CRITICAL $DOCKER_IMAGE
+  only:
+    - main
+  allow_failure: true
+
+# ==========================================
+# STAGE 4: Deploy
+# ==========================================
+deploy:staging:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${STAGING_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"env": [{"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"}]}'
+  environment:
+    name: staging
+    url: https://staging-go-api.ceres
+  only:
+    - develop
+
+deploy:production:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${PROD_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"env": [{"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"}]}'
+  environment:
+    name: production
+    url: https://go-api.ceres
+  when: manual
+  only:
+    - main
+
+# ==========================================
+# STAGE 5: Notify
+# ==========================================
+notify:zulip:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    - |
+      STATUS="✅"
+      if [ "$CI_JOB_STATUS" != "success" ]; then STATUS="❌"; fi
+      curl -X POST "https://zulip.ceres/api/v1/messages" \
+        -u "${ZULIP_BOT_EMAIL}:${ZULIP_BOT_API_KEY}" \
+        -d "type=stream" \
+        -d "to=deployments" \
+        -d "topic=${CI_PROJECT_NAME}" \
+        -d "content=$STATUS Go pipeline ${CI_PIPELINE_ID} - ${CI_JOB_STATUS}"
+  when: always

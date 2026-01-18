@@ -1,0 +1,38 @@
+#cloud-config
+hostname: ${hostname}
+fqdn: ${fqdn}
+manage_etc_hosts: true
+
+users:
+  - name: ${username}
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_key}
+
+timezone: ${timezone}
+
+# Package updates
+package_update: true
+package_upgrade: true
+
+# Install required packages
+packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - vim
+  - net-tools
+  - qemu-guest-agent
+  - python3-pip
+
+# Enable services
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - echo "Cloud-init complete" > /tmp/cloud-init-done
+
+# Final message
+final_message: "CERES VM ${hostname} is ready after $UPTIME seconds"

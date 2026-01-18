@@ -1,0 +1,44 @@
+#!/bin/bash
+# CERES Cross-Platform Wrapper
+# Provides unified interface for ceres.ps1 on Linux/macOS
+
+set -e
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI="$SCRIPT_DIR/scripts/ceres.ps1"
+
+# Prefer PowerShell Core (pwsh), fallback to Windows PowerShell if available
+if command -v pwsh >/dev/null 2>&1; then
+    exec pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$CLI" "$@"
+elif command -v powershell >/dev/null 2>&1; then
+    exec powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$CLI" "$@"
+else
+    echo "Error: pwsh or powershell not found in PATH" >&2
+    exit 1
+fi
+    echo ""
+    echo "Or download from: https://github.com/PowerShell/PowerShell/releases"
+    exit 1
+fi
+
+# Check PowerShell version
+PS_VERSION=$(pwsh --version | awk '{print $NF}')
+PS_MAJOR=$(echo $PS_VERSION | cut -d. -f1)
+
+if [ "$PS_MAJOR" -lt 6 ]; then
+    echo -e "${YELLOW}Warning: PowerShell $PS_VERSION detected${NC}"
+    echo "CERES works best with PowerShell Core 7.0 or later"
+    echo ""
+fi
+
+# Run CERES CLI through PowerShell
+cd "$PROJECT_ROOT"
+
+echo -e "${CYAN}CERES CLI${NC} (cross-platform wrapper)"
+echo "Project root: $PROJECT_ROOT"
+echo "PowerShell: $(pwsh --version)"
+echo ""
+
+# Pass all arguments to PowerShell script
+pwsh -File "$PROJECT_ROOT/scripts/ceres.ps1" "$@"

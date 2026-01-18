@@ -1,0 +1,82 @@
+﻿{
+    "profile":  "Small",
+    "timestamp":  "2026-01-17 23:18:46",
+    "details":  {
+                    "version":  "1.0",
+                    "name":  "Small",
+                    "description":  "Development/PoC, 1-2 VMs, 8-12 CPU, 16-24 GB RAM",
+                    "deployment":  {
+                                       "type":  "docker-compose",
+                                       "ha":  false,
+                                       "environment":  "development"
+                                   },
+                    "virtual_machines":  [
+                                             {
+                                                 "id":  1,
+                                                 "name":  "all-in-one",
+                                                 "cpu":  4,
+                                                 "ram_gb":  8,
+                                                 "disk_gb":  80,
+                                                 "services":  [
+                                                                  "postgresql",
+                                                                  "redis",
+                                                                  "keycloak",
+                                                                  "nextcloud",
+                                                                  "gitea",
+                                                                  "prometheus",
+                                                                  "grafana",
+                                                                  "caddy",
+                                                                  "portainer"
+                                                              ]
+                                             }
+                                         ],
+                    "resource_allocation":  {
+                                                "postgresql":  {
+                                                                   "cpu_limit":  "1.0",
+                                                                   "memory_limit":  "1G",
+                                                                   "memory_reservation":  "512M"
+                                                               },
+                                                "redis":  {
+                                                              "cpu_limit":  "0.5",
+                                                              "memory_limit":  "512M",
+                                                              "memory_reservation":  "256M"
+                                                          },
+                                                "keycloak":  {
+                                                                 "cpu_limit":  "1.0",
+                                                                 "memory_limit":  "1G",
+                                                                 "memory_reservation":  "512M"
+                                                             },
+                                                "nextcloud":  {
+                                                                  "cpu_limit":  "1.0",
+                                                                  "memory_limit":  "1G",
+                                                                  "memory_reservation":  "512M"
+                                                              },
+                                                "gitea":  {
+                                                              "cpu_limit":  "0.75",
+                                                              "memory_limit":  "800M",
+                                                              "memory_reservation":  "400M"
+                                                          },
+                                                "prometheus":  {
+                                                                   "cpu_limit":  "0.5",
+                                                                   "memory_limit":  "512M",
+                                                                   "memory_reservation":  "256M"
+                                                               },
+                                                "grafana":  {
+                                                                "cpu_limit":  "0.5",
+                                                                "memory_limit":  "512M",
+                                                                "memory_reservation":  "256M"
+                                                            }
+                                            },
+                    "optional_modules":  {
+                                             "vpn":  false,
+                                             "mail":  false,
+                                             "edms":  false,
+                                             "loki":  false
+                                         },
+                    "estimated_cost":  {
+                                           "provider":  "local_docker",
+                                           "monthly_usd":  0,
+                                           "notes":  "Docker Desktop (free) or local hardware"
+                                       }
+                }
+}

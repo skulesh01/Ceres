@@ -1,0 +1,153 @@
+{
+  "version": "1.0",
+  "name": "Large",
+  "description": "Enterprise HA, 4-5 VMs, 16 CPU, 40 GB RAM with failover",
+  "deployment": {
+    "type": "kubernetes-proxmox",
+    "ha": true,
+    "environment": "enterprise"
+  },
+  "virtual_machines": [
+    {
+      "id": 1,
+      "name": "core-primary",
+      "ip": "192.168.1.10",
+      "cpu": 6,
+      "ram_gb": 16,
+      "disk_gb": 100,
+      "services": [
+        "postgresql-primary",
+        "redis-primary",
+        "keycloak",
+        "patroni",
+        "etcd"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "core-backup",
+      "ip": "192.168.1.11",
+      "cpu": 6,
+      "ram_gb": 16,
+      "disk_gb": 100,
+      "services": [
+        "postgresql-replica",
+        "redis-replica",
+        "keycloak-replica",
+        "patroni",
+        "etcd"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "apps-1",
+      "ip": "192.168.1.12",
+      "cpu": 4,
+      "ram_gb": 8,
+      "disk_gb": 100,
+      "services": [
+        "nextcloud",
+        "gitea",
+        "mattermost",
+        "redmine",
+        "wikijs"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "apps-2",
+      "ip": "192.168.1.13",
+      "cpu": 4,
+      "ram_gb": 8,
+      "disk_gb": 100,
+      "services": [
+        "nextcloud-replica",
+        "gitea-replica",
+        "mattermost-replica"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "edge",
+      "ip": "192.168.1.14",
+      "cpu": 4,
+      "ram_gb": 8,
+      "disk_gb": 50,
+      "services": [
+        "caddy",
+        "prometheus",
+        "grafana",
+        "loki",
+        "portainer",
+        "uptime-kuma",
+        "alertmanager"
+      ]
+    }
+  ],
+  "resource_allocation": {
+    "postgresql": {
+      "cpu_limit": "2.0",
+      "memory_limit": "4G",
+      "memory_reservation": "2G"
+    },
+    "redis": {
+      "cpu_limit": "1.5",
+      "memory_limit": "2G",
+      "memory_reservation": "1G"
+    },
+    "keycloak": {
+      "cpu_limit": "2.0",
+      "memory_limit": "2G",
+      "memory_reservation": "1.5G"
+    },
+    "nextcloud": {
+      "cpu_limit": "1.5",
+      "memory_limit": "2G",
+      "memory_reservation": "1G"
+    },
+    "gitea": {
+      "cpu_limit": "1.5",
+      "memory_limit": "1.5G",
+      "memory_reservation": "1G"
+    },
+    "mattermost": {
+      "cpu_limit": "1.5",
+      "memory_limit": "2G",
+      "memory_reservation": "1G"
+    },
+    "prometheus": {
+      "cpu_limit": "1.5",
+      "memory_limit": "2G",
+      "memory_reservation": "1G"
+    },
+    "grafana": {
+      "cpu_limit": "1.0",
+      "memory_limit": "1G",
+      "memory_reservation": "512M"
+    },
+    "loki": {
+      "cpu_limit": "1.0",
+      "memory_limit": "2G",
+      "memory_reservation": "1G"
+    }
+  },
+  "optional_modules": {
+    "vpn": true,
+    "mail": true,
+    "edms": true,
+    "loki": true
+  },
+  "estimated_cost": {
+    "provider": "hetzner",
+    "monthly_usd": 400,
+    "breakdown": {
+      "core_primary_vm": 60,
+      "core_backup_vm": 60,
+      "apps_1_vm": 80,
+      "apps_2_vm": 80,
+      "edge_vm": 80,
+      "storage": 40
+    },
+    "notes": "5 VM + shared storage (NFS/Gluster) on Hetzner Cloud"
+  }
+}

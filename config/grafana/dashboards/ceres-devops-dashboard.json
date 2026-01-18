@@ -1,0 +1,188 @@
+{
+  "dashboard": {
+    "title": "CERES DevOps Dashboard",
+    "tags": ["ceres", "devops", "gitlab", "ci/cd"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "GitLab - Commits Today",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "increase(gitlab_transaction_duration_seconds_count{controller='ProjectsController',action='show'}[24h])",
+            "legendFormat": "Commits"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 2,
+        "title": "GitLab - Pipeline Success Rate",
+        "type": "gauge",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(gitlab_ci_pipeline_success_total[1h])) / sum(rate(gitlab_ci_pipeline_total[1h])) * 100",
+            "legendFormat": "Success %"
+          }
+        ],
+        "options": {
+          "min": 0,
+          "max": 100,
+          "thresholds": [
+            {"value": 0, "color": "red"},
+            {"value": 80, "color": "yellow"},
+            {"value": 95, "color": "green"}
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "title": "Zulip - Active Users (24h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "zulip_active_users_24h",
+            "legendFormat": "Users"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Nextcloud - Storage Usage",
+        "type": "gauge",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "nextcloud_storage_used_bytes / nextcloud_storage_total_bytes * 100",
+            "legendFormat": "Storage %"
+          }
+        ],
+        "options": {
+          "min": 0,
+          "max": 100,
+          "thresholds": [
+            {"value": 0, "color": "green"},
+            {"value": 70, "color": "yellow"},
+            {"value": 90, "color": "red"}
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "title": "GitLab - Active Pipelines",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "gitlab_ci_pipeline_status{status='running'}",
+            "legendFormat": "Running"
+          },
+          {
+            "expr": "gitlab_ci_pipeline_status{status='pending'}",
+            "legendFormat": "Pending"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Zulip - Messages Per Hour",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "rate(zulip_messages_sent_total[1h])",
+            "legendFormat": "Messages/hour"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "PostgreSQL - Connections",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends",
+            "legendFormat": "{{datname}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Redis - Memory Usage",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 12},
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes",
+            "legendFormat": "Used Memory"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Container CPU Usage",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total[5m]) * 100",
+            "legendFormat": "{{name}}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "GitLab - Merge Requests",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "gitlab_merge_requests_total{state='opened'}",
+            "legendFormat": "Open MRs"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "GitLab - Issues",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 18},
+        "targets": [
+          {
+            "expr": "gitlab_issues_total{state='opened'}",
+            "legendFormat": "Open Issues"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "System Load",
+        "type": "graph",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 18},
+        "targets": [
+          {
+            "expr": "node_load1",
+            "legendFormat": "Load 1m"
+          },
+          {
+            "expr": "node_load5",
+            "legendFormat": "Load 5m"
+          }
+        ]
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    }
+  }
+}

@@ -1,0 +1,188 @@
+# Python Application CI/CD Pipeline
+# For Django, Flask, FastAPI applications
+
+stages:
+  - lint
+  - test
+  - security
+  - build
+  - deploy
+  - notify
+
+variables:
+  PYTHON_VERSION: "3.11"
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+# ==========================================
+# STAGE 1: Lint & Code Quality
+# ==========================================
+lint:black:
+  stage: lint
+  image: python:${PYTHON_VERSION}
+  before_script:
+    - pip install black flake8 isort mypy
+  script:
+    - black --check .
+    - flake8 . --max-line-length=120
+    - isort --check-only .
+    - mypy . --ignore-missing-imports
+  allow_failure: true
+
+# ==========================================
+# STAGE 2: Test
+# ==========================================
+test:unit:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  services:
+    - postgres:15
+    - redis:7
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: test
+    POSTGRES_PASSWORD: test
+    DATABASE_URL: postgresql://test:test@postgres:5432/test_db
+    REDIS_URL: redis://redis:6379/0
+  before_script:
+    - pip install -r requirements.txt
+    - pip install pytest pytest-cov pytest-django
+  script:
+    - pytest --cov=. --cov-report=xml --cov-report=term
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - htmlcov/
+    expire_in: 1 week
+
+test:integration:
+  stage: test
+  image: python:${PYTHON_VERSION}
+  services:
+    - postgres:15
+    - redis:7
+  variables:
+    DATABASE_URL: postgresql://test:test@postgres:5432/test_db
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - python manage.py test --settings=config.settings.test
+
+# ==========================================
+# STAGE 3: Security Scanning
+# ==========================================
+security:bandit:
+  stage: security
+  image: python:${PYTHON_VERSION}
+  before_script:
+    - pip install bandit
+  script:
+    - bandit -r . -f json -o bandit-report.json
+  artifacts:
+    reports:
+      sast: bandit-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+security:safety:
+  stage: security
+  image: python:${PYTHON_VERSION}
+  before_script:
+    - pip install safety
+  script:
+    - safety check --json > safety-report.json
+  artifacts:
+    paths:
+      - safety-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+# ==========================================
+# STAGE 4: Build Docker Image
+# ==========================================
+build:docker:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $DOCKER_IMAGE .
+    - docker tag $DOCKER_IMAGE $CI_REGISTRY_IMAGE:latest
+    - docker push $DOCKER_IMAGE
+    - docker push $CI_REGISTRY_IMAGE:latest
+  only:
+    - main
+    - develop
+
+# ==========================================
+# STAGE 5: Deploy
+# ==========================================
+deploy:staging:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${STAGING_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"env": [{"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"}], "prune": true}'
+  environment:
+    name: staging
+    url: https://staging-api.ceres
+  only:
+    - develop
+
+deploy:production:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      curl -X POST "${PORTAINER_URL}/api/stacks/${PROD_STACK_ID}/git/redeploy" \
+        -H "X-API-Key: ${PORTAINER_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"env": [{"name": "IMAGE_TAG", "value": "'${CI_COMMIT_SHORT_SHA}'"}], "prune": true}'
+  environment:
+    name: production
+    url: https://api.ceres
+  when: manual
+  only:
+    - main
+
+# Run migrations
+deploy:migrate:
+  stage: deploy
+  image: $DOCKER_IMAGE
+  script:
+    - python manage.py migrate --noinput
+  only:
+    - main
+  when: manual
+
+# ==========================================
+# STAGE 6: Notify
+# ==========================================
+notify:zulip:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    - |
+      STATUS="✅"
+      if [ "$CI_JOB_STATUS" != "success" ]; then STATUS="❌"; fi
+      curl -X POST "https://zulip.ceres/api/v1/messages" \
+        -u "${ZULIP_BOT_EMAIL}:${ZULIP_BOT_API_KEY}" \
+        -d "type=stream" \
+        -d "to=deployments" \
+        -d "topic=python-api" \
+        -d "content=$STATUS **${CI_PROJECT_NAME}** pipeline ${CI_PIPELINE_ID}
+        
+**Branch:** ${CI_COMMIT_REF_NAME}
+**Commit:** ${CI_COMMIT_SHORT_SHA}
+**Author:** ${CI_COMMIT_AUTHOR}
+**Status:** ${CI_JOB_STATUS}
+**URL:** ${CI_PIPELINE_URL}"
+  when: always
