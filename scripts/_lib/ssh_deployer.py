@@ -186,8 +186,8 @@ class SSHDeployer:
         
         Args:
             cmd: Command to execute
-            show_output: Show output to console
-            stream_output: Stream output in real-time (line by line as it comes)
+            show_output: Show output to console (and log it)
+            stream_output: Deprecated - kept for compatibility
         """
         if not self.ssh:
             print("[ERROR] Not connected")
@@ -195,56 +195,56 @@ class SSHDeployer:
         
         try:
             chan = self.ssh.get_transport().open_session()
-            # Use bash -lc to support multi-line and environment
-            chan.exec_command(f"bash -lc '{cmd}'")
+            # Use bash -c to support multi-line and environment
+            chan.exec_command(f"bash -c '{cmd}'")
             
-            stdout = chan.makefile('r')
-            stderr = chan.makefile_stderr('r')
-            
-            if show_output or stream_output:
-                # Read and display output in real-time
-                import select
-                import sys
-                
-                while True:
-                    # Check if there's data to read from either stdout or stderr
-                    readable, _, _ = select.select([stdout, stderr], [], [], 0.1)
-                    
-                    for stream in readable:
-                        line = stream.readline()
-                        if not line:
-                            continue
-                        
-                        # Decode if bytes
-                        if isinstance(line, bytes):
-                            line = line.decode('utf-8', errors='ignore')
-                        
-                        line = line.rstrip()
-                        if line:
-                            if stream == stderr:
-                                print(f"  [ERR] {line}")
-                            else:
-                                print(f"  {line}")
-                            
-                            # Flush to ensure real-time display
-                            sys.stdout.flush()
-                    
-                    # Check if process is done
+            # Read all output while command runs
+            output_buffer = []
+            while True:
+                try:
+                    # Check if process has exited
                     if chan.exit_status_ready():
-                        # Read any remaining output
-                        for line in stdout:
-                            if isinstance(line, bytes):
-                                line = line.decode('utf-8', errors='ignore')
-                            line = line.rstrip()
-                            if line:
-                                print(f"  {line}")
-                        for line in stderr:
-                            if isinstance(line, bytes):
-                                line = line.decode('utf-8', errors='ignore')
-                            line = line.rstrip()
-                            if line:
-                                print(f"  [ERR] {line}")
                         break
+                    
+                    # Try to read available data (non-blocking)
+                    import time as time_module
+                    time_module.sleep(0.05)
+                    
+                    # Read from channel
+                    data = chan.recv(4096)
+                    if not data:
+                        continue
+                    
+                    if isinstance(data, bytes):
+                        data = data.decode('utf-8', errors='ignore')
+                    
+                    output_buffer.append(data)
+                    
+                    if show_output:
+                        # Print each line as it arrives
+                        for line in data.split('\n'):
+                            if line:
+                                print(line)
+                                sys.stdout.flush()
+                except:
+                    pass
+            
+            # Get remaining output
+            try:
+                while True:
+                    data = chan.recv(4096)
+                    if not data:
+                        break
+                    if isinstance(data, bytes):
+                        data = data.decode('utf-8', errors='ignore')
+                    output_buffer.append(data)
+                    if show_output:
+                        for line in data.split('\n'):
+                            if line:
+                                print(line)
+                                sys.stdout.flush()
+            except:
+                pass
             
             exit_code = chan.recv_exit_status()
             return exit_code == 0

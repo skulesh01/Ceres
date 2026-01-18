@@ -80,40 +80,54 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
         log_msg("\n>>> Cloning CERES project from GitHub...")
         github_repo = "https://github.com/skulesh01/Ceres.git"
         clone_cmd = f"cd {remote_dir} && git clone --depth 1 {github_repo} . 2>&1"
-        deployer.run_command(clone_cmd, show_output=True, stream_output=True)
-        log_msg("[OK] Project cloned successfully")
+        result = deployer.run_command(clone_cmd, show_output=True, stream_output=False)
+        if result:
+            log_msg("[OK] Project cloned successfully")
+        else:
+            log_msg("[ERROR] Git clone failed")
+            deployer.close()
+            return 1
     except Exception as e:
-        log_msg(f"[ERROR] Git clone failed: {e}")
+        log_msg(f"[ERROR] Git clone exception: {e}")
         deployer.close()
         return 1
     
     progress.update()
     
     # Now run installation and deployment scripts
-    print("\n>>> Installing dependencies on remote server...")
+    log_msg("\n>>> Installing dependencies on remote server...")
     install_script = r'''
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq 2>&1 | tail -1
-apt-get install -y -qq python3 python3-pip git wget curl unzip gnupg lsb-release ca-certificates
-curl -fsSL https://get.docker.com | sh
-python3 -m pip install --quiet paramiko docker --disable-pip-version-check
-echo "[OK] Dependencies installed"
+apt-get update -qq 2>&1 | grep -E "(Reading|Building|Setting)" || echo "apt-get updated"
+apt-get install -y -qq python3 python3-pip git wget curl 2>&1 | tail -5 || true
+curl -fsSL https://get.docker.com -o /tmp/docker.sh && bash /tmp/docker.sh 2>&1 | tail -3 || true
+python3 -m pip install --quiet paramiko docker --disable-pip-version-check 2>&1 | tail -2 || true
+echo "=== Dependencies installation complete ==="
 '''
-    if not deployer.run_command(install_script, show_output=False):
-        log_msg("[WARN] Some dependencies may have failed, continuing...")
+    result = deployer.run_command(install_script, show_output=True, stream_output=False)
+    if result:
+        log_msg("[OK] Dependencies installed")
+    else:
+        log_msg("[WARN] Some dependencies may have failed, but continuing...")
     progress.update()
     
-    print("\n>>> Running deployment orchestration from cloned project...\n")
-    print("=" * 80)
+    log_msg("\n>>> Starting deployment orchestration from cloned project...")
+    print("\n" + "=" * 80)
     print("LIVE OUTPUT FROM SERVER:")
     print("=" * 80 + "\n")
     
     # Run deployment script from cloned project with streaming output
-    deployer.run_command(
-        f"cd {remote_dir} && python3 auto-deploy.py 2>&1 | tee -a {remote_dir}/logs/deployment.log",
+    log_msg(">>> Running auto-deploy.py on server...")
+    result = deployer.run_command(
+        f"cd {remote_dir} && python3 auto-deploy.py 2>&1",
         show_output=True,
-        stream_output=True
+        stream_output=False
     )
+    
+    if result:
+        log_msg("[OK] Deployment orchestration completed")
+    else:
+        log_msg("[ERROR] Deployment orchestration failed")
     
     print("\n" + "=" * 80)
     
