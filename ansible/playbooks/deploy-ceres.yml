@@ -111,7 +111,7 @@
 
     - name: Clone CERES repository
       git:
-        repo: 'https://github.com/yourorg/ceres.git'
+        repo: 'https://github.com/skulesh01/Ceres.git'
         dest: "{{ ceres_base_dir }}"
         version: main
         force: yes

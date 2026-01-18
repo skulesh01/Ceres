@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Cross-Platform](https://img.shields.io/badge/Cross--Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen?style=flat-square)
 
-**CERES** — это единая платформа для развёртывания и управления **40+ open-source сервисами** (Nextcloud, Gitea, Keycloak, Mattermost, Redmine, Wiki.js, Grafana, PostgreSQL, Redis, Loki и др.) на одной машине или через Kubernetes на Proxmox с полным GitOps контролем. Модульная архитектура позволяет выбрать нужные сервисы в зависимости от профиля (small/medium/large).
+**CERES** — единая платформа для развёртывания и управления **20+ open-source сервисами** (GitLab CE, Zulip, Nextcloud, Mayan EDMS, OnlyOffice/Collabora, Keycloak, PostgreSQL, Redis, Prometheus/Grafana, Caddy, WireGuard и др.) на одной машине (Docker Compose) или через Kubernetes/Proxmox с полным GitOps-контролем. Модульная архитектура позволяет выбрать профиль (small/medium/large) под ресурсы.
 
 ### Единая точка входа
 
@@ -16,7 +16,7 @@
 
 Запомнить просто: одна команда `ceres` для всего, без поиска по скриптам.
 
-Работает на **Windows 10/11**, **Linux** (Ubuntu, CentOS, Debian), **macOS** (Intel & Apple Silicon) ✅
+Работает на **Windows 10/11**, **Linux** (Ubuntu, Debian, RHEL), **macOS** (Intel & Apple Silicon) ✅
 
 ## 🎯 Что это?
 
@@ -25,31 +25,13 @@
 - **Для всех**: Единая точка входа через `ceres.ps1` CLI приложение
 - **Кроссплатформенно**: Работает везде - Windows, Linux, macOS
 
-## ⭐ ENTERPRISE INTEGRATION ANALYSIS
+## ⭐ Что внутри (кратко)
 
-> **🔥 НОВОЕ!** Комплексный анализ интеграции сервисов для enterprise ready платформы!
-
-### Статус: 69/100 → Путь к 95%+ enterprise readiness
-
-**Быстрый обзор:**
-- ✅ **Выбор сервисов**: 9/10 (top-tier open-source)
-- ✅ **Плагины**: 92/100 (1235+ доступных, 95% бесплатные!)
-- ⚠️ **Конфигурация**: 80/100 (большинство имеют UI)
-- ❌ **Интеграция**: 50/100 (требует работы)
-
-**Путь к 95%+ enterprise ready (21 час):**
-1. **Фаза 1** (5 ч): Alerting + Webhooks → 65% ready
-2. **Фаза 2** (6 ч): Integration + File Sync → 85% ready ✅ PRODUCTION READY
-3. **Фаза 3** (10 ч): HA + Resilience → 95%+ enterprise-grade
-
-📖 **ЧИТАЙТЕ ПЕРВЫМ**: [START_HERE_ENTERPRISE_INTEGRATION.md](START_HERE_ENTERPRISE_INTEGRATION.md)
-
-**Все документы:**
-- [ENTERPRISE_READINESS_SUMMARY.md](ENTERPRISE_READINESS_SUMMARY.md) — Полный анализ
-- [INTEGRATION_MATRIX_DETAILED.md](INTEGRATION_MATRIX_DETAILED.md) — Матрица интеграции
-- [ENTERPRISE_INTEGRATION_ACTION_PLAN.md](ENTERPRISE_INTEGRATION_ACTION_PLAN.md) — Пошаговый план
-- [PLUGIN_ECOSYSTEM_ANALYSIS.md](PLUGIN_ECOSYSTEM_ANALYSIS.md) — Анализ плагинов
-- [ENTERPRISE_INTEGRATION_ARCHITECTURE.md](ENTERPRISE_INTEGRATION_ARCHITECTURE.md) — Архитектура
+- **Core**: PostgreSQL, Redis, Keycloak (SSO)
+- **Apps**: GitLab CE (Git+CI/CD+Registry), Zulip (чат), Nextcloud (файлы), Mayan EDMS (документы + OCR), OnlyOffice/Collabora (редактор)
+- **Observability**: Prometheus, Grafana, Alertmanager, 7 экспортёров
+- **Edge/VPN/SMTP**: Caddy (reverse-proxy), WireGuard (wg-easy), Mailu (опционально)
+- **GitOps**: FluxCD (k3s/Proxmox), Terraform + Ansible для инфраструктуры
 
 ## 🚀 Быстрый старт (5 минут)
 
@@ -117,12 +99,10 @@ CERES/
 │
 ├── docs/                           ← ДОКУМЕНТАЦИЯ
 │   ├── 00-QUICKSTART.md            ← Начните отсюда (5 мин)
-│   ├── 01-CLI-USAGE.md             ← Как использовать CLI
-│   ├── 02-ARCHITECTURE.md          ← Архитектура системы
-│   ├── 03-PROFILES.md              ← Профили и конфигурации
-│   ├── 04-DEPLOYMENT.md            ← Процесс развёртывания
-│   ├── 05-TROUBLESHOOTING.md       ← Решение проблем
-│   └── 10-DEVELOPER-GUIDE.md       ← Для разработчиков
+│   ├── 01-CROSSPLATFORM.md         ← Кроссплатформенная установка
+│   ├── 02-LINUX_SETUP.md           ← Установка на Linux
+│   ├── 03-CLI_REFERENCE.md         ← Команды CLI `ceres`
+│   └── IMPLEMENTATION_GUIDE.md     ← Детальный гид по развёртыванию
 │
 ├── examples/                       ← ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ
 │   ├── local-setup.md              ← Локальная разработка
@@ -148,15 +128,15 @@ CERES/
 - Первый запуск
 
 ### 🟡 **Администратор** — 20 минут
-1. [docs/01-CLI-USAGE.md](docs/01-CLI-USAGE.md) — как пользоваться
-2. [docs/03-PROFILES.md](docs/03-PROFILES.md) — выбор конфигурации
-3. [docs/04-DEPLOYMENT.md](docs/04-DEPLOYMENT.md) — развёртывание
+1. [docs/03-CLI_REFERENCE.md](docs/03-CLI_REFERENCE.md) — как пользоваться CLI
+2. [docs/01-CROSSPLATFORM.md](docs/01-CROSSPLATFORM.md) — установка под вашу ОС
+3. [docs/02-LINUX_SETUP.md](docs/02-LINUX_SETUP.md) — Linux specifics
 
-### 🔴 **DevOps / Разработчик** — 1 час
-1. [docs/02-ARCHITECTURE.md](docs/02-ARCHITECTURE.md) — как работает внутри
-2. [docs/10-DEVELOPER-GUIDE.md](docs/10-DEVELOPER-GUIDE.md) — расширение
-3. [CERES_CLI_ARCHITECTURE.md](CERES_CLI_ARCHITECTURE.md) — CLI архитектура
-4. [examples/](examples/) — практические примеры
+### 🔴 **DevOps** — 1 час
+1. [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) — детальный деплой
+2. [CERES_CLI_ARCHITECTURE.md](CERES_CLI_ARCHITECTURE.md) — как устроен CLI
+3. [ARCHITECTURE.md](ARCHITECTURE.md) — состав сервисов и порты
+4. [FULL_INTEGRATION_MASTER_PLAN.md](FULL_INTEGRATION_MASTER_PLAN.md) — интеграции
 
 ## 🎯 Основные команды CLI
 

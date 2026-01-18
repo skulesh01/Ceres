@@ -48,60 +48,30 @@ edge_vm ansible_host=$EDGE_VM_IP") \
 echo "✓ Base infrastructure ready (k3s installed)"
 echo ""
 
-# STEP 4: Deploy services with Helm
-echo "[4/5] Deploying all CERES services..."
-export KUBECONFIG=~/.kube/config
+# STEP 4: Ansible deploy (Docker stack on provisioned VMs)
+echo "[4/5] Deploying CERES services with Ansible..."
+INVENTORY=$(mktemp)
+cat > "$INVENTORY" <<EOF
+[ceres_servers]
+core_vm ansible_host=$CORE_VM_IP ansible_user=root
+apps_vm ansible_host=$APPS_VM_IP ansible_user=root
+edge_vm ansible_host=$EDGE_VM_IP ansible_user=root
+EOF
 
-# Deploy core services
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo update
+ansible-playbook -i "$INVENTORY" ansible/playbooks/deploy-ceres.yml
+rm -f "$INVENTORY"
 
-helm install postgresql bitnami/postgresql \
-    -n ceres --create-namespace \
-    -f config/helm/postgresql-values.yml
-
-helm install redis bitnami/redis \
-    -n ceres \
-    -f config/helm/redis-values.yml
-
-# Deploy applications
-helm install keycloak bitnami/keycloak \
-    -n ceres \
-    -f config/helm/keycloak-values.yml
-
-helm install gitlab bitnami/gitlab \
-    -n ceres \
-    -f config/helm/gitlab-values.yml
-
-# Deploy monitoring
-helm install prometheus bitnami/prometheus \
-    -n ceres \
-    -f config/helm/prometheus-values.yml
-
-helm install grafana bitnami/grafana \
-    -n ceres \
-    -f config/helm/grafana-values.yml
-
-echo "✓ All services deployed"
+echo "✓ Services deployed (Docker/Compose)."
 echo ""
 
-# STEP 5: Bootstrap integrations
-echo "[5/5] Setting up integrations..."
-pwsh -File ./scripts/keycloak-bootstrap-full.ps1
-pwsh -File ./scripts/setup-webhooks.ps1
+# STEP 5: Next steps (FluxCD/K8s optional)
+echo "[5/5] Next steps (manual):"
+echo "- (Optional) Bootstrap FluxCD: see flux/README.md"
+echo "- (Optional) Run scripts/keycloak-bootstrap-full.ps1 for OIDC clients"
+echo "- Validate services: docker ps, curl https://auth.$DOMAIN"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║              DEPLOYMENT COMPLETE!                              ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
-echo ""
-echo "Services:"
-echo "  Keycloak:  https://auth.$DOMAIN"
-echo "  GitLab:    https://gitlab.$DOMAIN"
-echo "  Zulip:     https://zulip.$DOMAIN"
-echo "  Grafana:   https://grafana.$DOMAIN"
-echo ""
-echo "Getting kubeconfig:"
-echo "  export KUBECONFIG=~/.kube/config"
-echo "  kubectl get all -n ceres"
 echo ""

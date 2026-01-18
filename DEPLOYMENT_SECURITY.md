@@ -30,11 +30,13 @@ Ceres-Private/           # Private (NOT in Git)
 └── launcher.py          # Main entry point
 ```
 
+Ветка по умолчанию для установки: `main` (релизная). Локальные секреты остаются в `Ceres-Private/` и не публикуются.
+
 ## Quick Start
 
-### 1. Clone this repository
+### 1. Clone this repository (public)
 ```bash
-git clone https://github.com/yourusername/Ceres.git
+git clone https://github.com/skulesh01/Ceres.git
 cd Ceres
 ```
 
@@ -56,8 +58,7 @@ cat > credentials.json << 'EOF'
 }
 EOF
 
-# Copy deployment scripts from secure location
-# Or request access to private repo
+# Copy deployment scripts from secure location (Ceres-Private)
 ```
 
 ### 3. Deploy

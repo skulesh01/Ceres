@@ -6,10 +6,10 @@
 - как устроены связи (SSO, БД, метрики, логи)
 - какие порты открыты наружу и где лежат данные
 
-**📌 Полный реестр всех 40+ сервисов:** [SERVICES_INVENTORY.md](SERVICES_INVENTORY.md)  
+**📌 Полный реестр всех сервисов:** [SERVICES_INVENTORY.md](SERVICES_INVENTORY.md)  
 **✅ Проверка:** [SERVICES_VERIFICATION.md](SERVICES_VERIFICATION.md)
 
-Источник истины по составу сервисов: `config/compose/*.yml` (16 модулей) и `config/docker-compose-CLEAN.yml` (монолит).
+Источник истины по составу сервисов: `config/compose/*.yml` (модульно) и `config/docker-compose-CLEAN.yml` (монолит).
 
 ## 1) Общая схема
 
@@ -39,9 +39,9 @@ CERES запускается одним Docker Compose проектом (по у
       |        |              |                 |       |
       |  +-----------+   +---------+   +----------------+|
       |  | Grafana   |   | Redis   |   | Nextcloud      ||
-      |  | Prometheus|   +---------+   | Gitea          ||
-      |  | Loki      |                 | Mattermost     ||
-      |  | Redmine   |                 | Wiki.js        ||
+      |  | Prometheus|   +---------+   | GitLab CE      ||
+      |  | Loki      |                 | Zulip          ||
+      |  |           |                 | Mayan EDMS     ||
       |  +-----------+                 +----------------+|
       +------------------------------------------------+
 ```
@@ -60,19 +60,19 @@ CERES запускается одним Docker Compose проектом (по у
 ### Apps
 
 - Keycloak (OIDC): единая учётка/SSO.
+- GitLab CE: Git + Issues + CI/CD + Registry (заменяет Gitea/Redmine/Wiki.js).
+- Zulip: командный чат с webhooks и ботами.
 - Nextcloud: файлы, шаринг, WebDAV.
-- Gitea: Git + Web UI, SSH доступ.
-- Mattermost: командный чат.
-- Redmine: управление проектами.
-- Wiki.js: внутренняя база знаний.
+- Mayan EDMS: документооборот + OCR + workflows.
+- OnlyOffice / Collabora: онлайн-редактор для Nextcloud.
 
 ### Monitoring
 
 - Prometheus: сбор метрик.
 - Grafana: дашборды; вход через Keycloak OIDC.
-- cAdvisor: метрики контейнеров.
-- postgres_exporter, redis_exporter: метрики Postgres/Redis.
-- Loki + Promtail: централизованные логи контейнеров (просмотр через Grafana).
+- Alertmanager: маршрутизация алертов (email/Zulip).
+- Экспортёры: node_exporter, cAdvisor, postgres_exporter, redis_exporter, keycloak_exporter, nextcloud_exporter, caddy exporter.
+- Loki + Promtail (опционально): логи контейнеров (просмотр через Grafana).
 
 ### Ops
 
@@ -82,13 +82,14 @@ CERES запускается одним Docker Compose проектом (по у
 ### Edge (опционально)
 
 - Caddy: reverse-proxy (HTTPS + домены `*.${DOMAIN}`), единая точка входа на `80/443`.
+- WireGuard (wg-easy): VPN-доступ для админов/команды.
 
 ## 3) Порты и внешняя поверхность
 
 По умолчанию наружу открыто:
 
 - Caddy (модуль `edge`): `80/443` (весь web-трафик)
-- Gitea SSH (опционально): `2222`
+- GitLab SSH (опционально): `2222`
 
 Раньше сервисы были доступны по `http://localhost:<порт>`. После hardening эти порты **не публикуются** и доступны только внутри docker-сети.
 
@@ -105,14 +106,16 @@ CERES запускается одним Docker Compose проектом (по у
 
 OIDC клиенты, которые поддерживаются автоматизацией:
 
+- GitLab CE (OIDC)
+- Zulip (OIDC)
+- Nextcloud (OIDC)
 - Grafana (generic OAuth)
-- Redmine (OIDC через плагины/SSO-плагин; при необходимости локальные учётки)
-- Wiki.js (Keycloak provider)
+- Portainer (OIDC)
+- Mayan EDMS (OIDC)
 
 Скрипты:
 
-- `scripts/keycloak-bootstrap.ps1`: создаёт/обновляет OIDC клиентов в Keycloak (идемпотентно).
-- `scripts/fix-wikijs-keycloak.ps1`: нормализует/чинит провайдера Keycloak в Wiki.js (через SQL в Postgres).
+- `scripts/keycloak-bootstrap-full.ps1`: создаёт/обновляет OIDC клиентов в Keycloak (идемпотентно) для GitLab/Zulip/Nextcloud/Grafana/Portainer/Mayan/uptime.
 
 ## 5) Данные и где они лежат
 
@@ -120,11 +123,12 @@ OIDC клиенты, которые поддерживаются автомат�
 
 - `pg_data`: Postgres
 - `redis_data`: Redis
+- `gitlab_data`, `gitlab_config`
 - `nextcloud_data`, `nextcloud_config`
-- `gitea_data`
-- `mattermost_data`, `mattermost_logs`, `mattermost_config`
+- `zulip_data`, `zulip_postgres_data`, `zulip_redis_data`
+- `mayan_data`, `mayan_db_data`, `mayan_rabbitmq_data`
 - `grafana_data`, `prometheus_data`
-- `loki_data`
+- `loki_data` (если включено)
 - `portainer_data`
 - `uptime_kuma_data`
 
@@ -134,12 +138,16 @@ OIDC клиенты, которые поддерживаются автомат�
 
 - `config/compose/base.yml`: общие примитивы (сеть `internal`).
 - `config/compose/core.yml`: Postgres + Redis.
-- `config/compose/apps.yml`: пользовательские приложения.
-- `config/compose/monitoring.yml`: метрики/логи.
-- `config/compose/ops.yml`: операционные UI.
-- `config/compose/edms.yml`: EDMS + согласование документов (Mayan EDMS).
-- `config/compose/edge.yml`: опциональный edge reverse-proxy (Caddy).
-- `config/compose/vpn.yml`: self-host VPN (WireGuard via wg-easy; UDP 51820 + localhost UI).
+- `config/compose/gitlab.yml`: GitLab CE + Registry.
+- `config/compose/zulip.yml`: Zulip + webhooks.
+- `config/compose/apps.yml`: Nextcloud и вспомогательные сервисы.
+- `config/compose/office-suite.yml`: OnlyOffice/Collabora.
+- `config/compose/mayan-edms.yml`: Mayan EDMS + OCR.
+- `config/compose/monitoring.yml`: Prometheus/Grafana/Alertmanager.
+- `config/compose/monitoring-exporters.yml`: 7 экспортёров (Postgres, Redis, Keycloak, Nextcloud, Node, cAdvisor, Caddy).
+- `config/compose/ops.yml`: Portainer, Uptime Kuma.
+- `config/compose/edge.yml`: edge reverse-proxy (Caddy).
+- `config/compose/vpn.yml`: WireGuard (wg-easy; UDP 51820 + UI).
 
 Рекомендуемые точки входа:
 
@@ -179,4 +187,5 @@ Ceres/
 
 ## 8) Нормальные “особенности” при проверках
 
--- `Mattermost` healthcheck может отвечать HTTP 404/302 на HEAD — используйте GET с `--spider`.
+-- Первичный старт GitLab CE может занимать 3-5 минут (инициализация БД/Redis и миграций).
+-- При включении monitoring-exporters метрики Keycloak/Nextcloud появляются через ~1-2 минуты после старта.
