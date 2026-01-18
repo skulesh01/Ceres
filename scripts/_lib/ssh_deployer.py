@@ -104,11 +104,11 @@ class ProgressBar:
 class SSHDeployer:
     """SSH deployment helper with archive, upload, execute capabilities"""
     
-    def __init__(self, host: str, user: str = 'root', password: str = None, timeout: int = 15):
+    def __init__(self, host: str, user: str = 'root', password: str = None, timeout: int = 30):
         self.host = host
         self.user = user
         self.password = password
-        self.timeout = timeout
+        self.timeout = timeout  # Increased from 15 to 30 seconds
         self.ssh = None
         self.sftp = None
     
@@ -209,6 +209,20 @@ class SSHDeployer:
         except Exception as e:
             print(f"[WARN] Error closing connection: {e}")
     
+    def setup_timezone(self, timezone: str = "Europe/Moscow") -> bool:
+        """Set timezone on remote server for correct logging"""
+        try:
+            # Set TZ environment variable and update system time
+            cmds = [
+                f"timedatectl set-timezone {timezone} 2>/dev/null || echo 'TZ cannot be set'",
+                f"export TZ={timezone}",
+                f"date"
+            ]
+            return self.run_command(" && ".join(cmds), show_output=False)
+        except Exception as e:
+            print(f"[WARN] Failed to setup timezone: {e}")
+            return False
+    
     def upload_file(self, local_path: Path, remote_path: str) -> bool:
         """Upload file to remote server"""
         try:
@@ -308,7 +322,7 @@ def create_project_archive(
         Path to created archive
     """
     if exclude is None:
-        exclude = ['.git', 'node_modules', '__pycache__', '.pyc', '.pytest_cache', '.venv']
+        exclude = ['.git', 'node_modules', '__pycache__', '.pyc', '.pytest_cache', '.venv', 'logs', '.env', 'credentials.json']
     
     print("\n>>> Creating project archive...")
     archive_path = Path.home() / 'ceres-project.tar.gz'
@@ -317,11 +331,12 @@ def create_project_archive(
         archive_path.unlink()
     
     def should_exclude(path: Path) -> bool:
-        path_str = str(path)
-        return any(x in path_str for x in exclude)
+        path_str = str(path).lower()
+        return any(x.lower() in path_str for x in exclude)
     
     def add_dir(tar: tarfile.TarFile, base_path: Path, arc_base: str):
         """Add directory contents to tar, respecting excludes"""
+        file_count = 0
         for p in base_path.rglob('*'):
             if should_exclude(p):
                 continue
@@ -331,6 +346,11 @@ def create_project_archive(
             
             try:
                 tar.add(str(p), arcname=arcname, recursive=False)
+                file_count += 1
+                # Print progress every 100 files
+                if file_count % 100 == 0:
+                    print(f"  ... {file_count} files processed", end='\r')
+                    sys.stdout.flush()
             except Exception as e:
                 print(f"  [WARN] Skipped {p}: {e}")
     
@@ -343,7 +363,7 @@ def create_project_archive(
                 add_dir(tar, private_dir, '')
         
         size_mb = archive_path.stat().st_size / (1024 * 1024)
-        print(f"[OK] Archive created: {size_mb:.1f}MB")
+        print(f"\n[OK] Archive created: {size_mb:.1f}MB")
         return archive_path
     except Exception as e:
         print(f"[ERROR] Archive creation failed: {e}")

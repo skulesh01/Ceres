@@ -35,10 +35,13 @@ def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Pa
     
     # Setup local logs directory inside project
     from ssh_deployer import get_project_logs_dir
+    import datetime
     local_logs_dir = get_project_logs_dir()
-    local_log_file = local_logs_dir / f"deploy-{int(start_time)}.log"
+    log_timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    local_log_file = local_logs_dir / f"deploy-{log_timestamp}.log"
     
     progress = ProgressBar()
+    progress.add_stage("Setup timezone", 1)
     progress.add_stage("Connecting", 2)
     progress.add_stage("Uploading archive", 15)
     progress.add_stage("Extracting files", 5)
@@ -48,17 +51,27 @@ def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Pa
     progress.update()
     if not deployer.connect():
         return 1
+    
+    # Setup timezone on remote server
+    progress.update()
+    print(f"\n>>> Setting timezone on server...")
+    deployer.setup_timezone("Europe/Moscow")
     progress.update()
     
     print(f"\n>>> Preparing remote directory: {remote_dir}")
     deployer.run_command(f"mkdir -p {remote_dir}/logs && touch {remote_dir}/logs/deployment.log", show_output=False)
     
-    # Log to both local file and remote
+    # Log to both local file and remote with timestamp
     def log_msg(msg: str):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamped_msg = f"[{timestamp}] {msg}"
         print(msg)
         with open(local_log_file, 'a', encoding='utf-8') as f:
-            f.write(msg + '\n')
-        deployer.run_command(f"echo '{msg}' >> {remote_dir}/logs/deployment.log", show_output=False)
+            f.write(timestamped_msg + '\n')
+            f.flush()  # Force flush to disk
+        # Log to remote with proper escaping
+        safe_msg = msg.replace("'", "'\\''")
+        deployer.run_command(f"echo '[{timestamp}] {safe_msg}' >> {remote_dir}/logs/deployment.log", show_output=False)
     
     log_msg(f"[{time.strftime('%H:%M:%S')}] Deployment started")
     
