@@ -199,6 +199,16 @@ class SSHDeployer:
             print(f"[ERROR] Command execution failed: {e}")
             return False
     
+    def close(self):
+        """Close SSH and SFTP connections"""
+        try:
+            if self.sftp:
+                self.sftp.close()
+            if self.ssh:
+                self.ssh.close()
+        except Exception as e:
+            print(f"[WARN] Error closing connection: {e}")
+    
     def upload_file(self, local_path: Path, remote_path: str) -> bool:
         """Upload file to remote server"""
         try:
