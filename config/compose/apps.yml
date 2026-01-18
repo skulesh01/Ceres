@@ -233,6 +233,9 @@ services:
     restart: unless-stopped
 
 networks:
+  internal:
+    external: true
+
 volumes:
   nextcloud_data:
   nextcloud_config:
