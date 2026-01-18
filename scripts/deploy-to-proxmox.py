@@ -76,23 +76,37 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
     log_msg(f"[{time.strftime('%H:%M:%S')}] Deployment started")
     
     try:
-        # Clone project from GitHub (no history with --depth 1)
-        log_msg("\n>>> Cloning CERES project from GitHub...")
+        # Clone project from GitHub locally, then upload
+        log_msg("\n>>> Cloning CERES project from GitHub locally...")
+        import os
+        import shutil
+        
         github_repo = "https://github.com/skulesh01/Ceres.git"
-        # Init git repo and pull from GitHub
-        clone_cmd = f"cd /tmp && git clone --depth 1 {github_repo} ceres-clone && cp -r ceres-clone/* {remote_dir}/ && rm -rf ceres-clone"
-        result = deployer.run_command(clone_cmd, show_output=True, stream_output=False)
-        if result:
-            log_msg("[OK] Project cloned successfully")
+        local_clone_dir = Path("/tmp/ceres-deploy-clone")
+        
+        # Clean up any previous clone
+        if local_clone_dir.exists():
+            shutil.rmtree(local_clone_dir)
+        local_clone_dir.mkdir(parents=True)
+        
+        # Clone locally
+        clone_cmd = f"git clone --depth 1 {github_repo} {local_clone_dir}"
+        os.system(clone_cmd)
+        
+        if (local_clone_dir / "config" / "compose").exists():
+            log_msg("[OK] Project cloned locally")
+            
+            # Upload entire project to remote
+            log_msg(">>> Uploading project to remote server...")
+            deployer.upload_dir(str(local_clone_dir), remote_dir)
+            log_msg("[OK] Project uploaded successfully")
+            
+            # Clean up local clone
+            shutil.rmtree(local_clone_dir)
         else:
-            # Try alternative: just use curl to get a tarball
-            log_msg("[WARN] Git clone failed, trying tarball download...")
-            tarball_cmd = f"cd {remote_dir} && curl -fsSL https://github.com/skulesh01/Ceres/archive/refs/heads/main.tar.gz | tar xz --strip-components=1"
-            result = deployer.run_command(tarball_cmd, show_output=True, stream_output=False)
-            if not result:
-                log_msg("[ERROR] Failed to clone/download project")
-                deployer.close()
-                return 1
+            log_msg("[ERROR] Git clone failed - compose directory missing")
+            deployer.close()
+            return 1
     except Exception as e:
         log_msg(f"[ERROR] Project download exception: {e}")
         deployer.close()
