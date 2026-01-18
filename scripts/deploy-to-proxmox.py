@@ -33,9 +33,9 @@ def test_connection(deployer: SSHDeployer) -> int:
 def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Path, remote_dir: str) -> int:
     start_time = time.time()
     
-    # Setup local logs directory
-    local_logs_dir = Path.home() / '.ceres' / 'logs'
-    local_logs_dir.mkdir(parents=True, exist_ok=True)
+    # Setup local logs directory inside project
+    from ssh_deployer import get_project_logs_dir
+    local_logs_dir = get_project_logs_dir()
     local_log_file = local_logs_dir / f"deploy-{int(start_time)}.log"
     
     progress = ProgressBar()

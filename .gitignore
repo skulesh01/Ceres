@@ -39,10 +39,13 @@ pip-delete-this-directory.txt
 .dockerignore
 docker-compose.override.yml
 
+# 💾 Логи развёртывания (хранятся в проекте, но не коммитятся)
+logs/
+*.log
+
 # 💾 Временные файлы
 *.tmp
 *.temp
-*.log
 *.swp
 *.swo
 *~

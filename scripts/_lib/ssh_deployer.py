@@ -4,9 +4,11 @@
 SSH Deployer Library
 Переиспользуемая библиотека для SSH операций (upload, execute, test connection)
 Используется: scripts/deploy-to-proxmox.py, Private/auto-deploy.py
+Логи хранятся в ./logs/ внутри проекта
 """
 
 import sys
+import os
 import time
 import tarfile
 import json
@@ -20,6 +22,17 @@ except ImportError:
     import subprocess
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'paramiko', '--quiet'])
     import paramiko
+
+
+def get_project_logs_dir() -> Path:
+    """Get logs directory inside project (independent of system)
+    logs/ is at the same level as scripts/, config/, terraform/
+    """
+    script_dir = Path(__file__).parent.parent  # scripts/
+    project_dir = script_dir.parent  # project root
+    logs_dir = project_dir / 'logs'
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    return logs_dir
 
 
 class ProgressBar:
