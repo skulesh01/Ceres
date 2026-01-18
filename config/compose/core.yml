@@ -54,6 +54,8 @@ services:
     restart: unless-stopped
 
 networks:
+  internal:
+
 volumes:
   pg_data:
   redis_data:
