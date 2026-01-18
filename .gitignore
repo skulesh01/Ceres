@@ -4,7 +4,7 @@
 ../Ceres-Private/
 *-Private/
 credentials.json
-deploy-to-proxmox.py
+# Note: deploy-to-proxmox.py is now in scripts/ as improved public version
 setup-ssh.py
 setup-ssh.ps1
 remote-deploy.py
