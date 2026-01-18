@@ -392,7 +392,12 @@ def create_project_archive(
         Path to created archive
     """
     if exclude is None:
-        exclude = ['.git', 'node_modules', '__pycache__', '.pyc', '.pytest_cache', '.venv', 'logs', '.env', 'credentials.json']
+        # Aggressive exclusion to keep archive small
+        exclude = [
+            '.git', 'node_modules', '__pycache__', '.pyc', '.pytest_cache', '.venv', 
+            'logs', '.env', 'credentials.json', 'archive', '.terraform', 'dist', 'build',
+            '.egg-info', '*.o', '*.so', '*.dylib', 'venv', 'ENV', 'env', '.DS_Store'
+        ]
     
     print("\n>>> Creating project archive...")
     archive_path = Path.home() / 'ceres-project.tar.gz'

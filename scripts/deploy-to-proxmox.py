@@ -78,6 +78,11 @@ def deploy(deployer: SSHDeployer, creds: dict, public_dir: Path, private_dir: Pa
     try:
         log_msg("\n>>> Creating project archive...")
         archive_path = create_project_archive(public_dir, private_dir)
+        
+        # Show what we're about to upload
+        archive_size_mb = archive_path.stat().st_size / (1024 * 1024)
+        log_msg(f">>> Archive ready: {archive_path.name} ({archive_size_mb:.1f}MB)")
+        log_msg(f">>> Uploading to {deployer.host}:{remote_dir}/...")
     except Exception as e:
         log_msg(f"[ERROR] {e}")
         deployer.close()
