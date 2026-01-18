@@ -79,17 +79,22 @@ def deploy(deployer: SSHDeployer, creds: dict, remote_dir: str) -> int:
         # Clone project from GitHub (no history with --depth 1)
         log_msg("\n>>> Cloning CERES project from GitHub...")
         github_repo = "https://github.com/skulesh01/Ceres.git"
-        # Use git clone with target directory to avoid empty folder issues
-        clone_cmd = f"git clone --depth 1 {github_repo} {remote_dir}_tmp && mv {remote_dir}_tmp/* {remote_dir}/ && rmdir {remote_dir}_tmp 2>&1"
+        # Init git repo and pull from GitHub
+        clone_cmd = f"cd /tmp && git clone --depth 1 {github_repo} ceres-clone && cp -r ceres-clone/* {remote_dir}/ && rm -rf ceres-clone"
         result = deployer.run_command(clone_cmd, show_output=True, stream_output=False)
         if result:
             log_msg("[OK] Project cloned successfully")
         else:
-            log_msg("[ERROR] Git clone failed")
-            deployer.close()
-            return 1
+            # Try alternative: just use curl to get a tarball
+            log_msg("[WARN] Git clone failed, trying tarball download...")
+            tarball_cmd = f"cd {remote_dir} && curl -fsSL https://github.com/skulesh01/Ceres/archive/refs/heads/main.tar.gz | tar xz --strip-components=1"
+            result = deployer.run_command(tarball_cmd, show_output=True, stream_output=False)
+            if not result:
+                log_msg("[ERROR] Failed to clone/download project")
+                deployer.close()
+                return 1
     except Exception as e:
-        log_msg(f"[ERROR] Git clone exception: {e}")
+        log_msg(f"[ERROR] Project download exception: {e}")
         deployer.close()
         return 1
     
