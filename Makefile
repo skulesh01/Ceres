@@ -37,10 +37,17 @@ help:
 	@echo "  make docs       - Open documentation"
 	@echo "  make shell      - Open shell in core container"
 	@echo ""
+	@echo "$(YELLOW)Deployment & Integration:$(NC)"
+	@echo "  make deploy            - Deploy with auto-setup (local)"
+	@echo "  make deploy-prod       - Deploy to remote server"
+	@echo "  make setup-integration - Setup OIDC integration"
+	@echo "  make verify-integration- Verify service integration"
+	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
 	@echo "  make start modules='core apps'     - Start specific modules"
 	@echo "  make logs service=postgres         - Show logs for one service"
 	@echo "  make backup name=before-upgrade    - Named backup"
+	@echo "  make deploy-prod SSH_HOST=192.168.1.3 SSH_USER=root"
 	@echo ""
 
 ## start: Start CERES services
@@ -118,6 +125,40 @@ docs:
 	else \
 		echo "$(YELLOW)Please open README.md manually$(NC)"; \
 	fi
+
+## shell: Open shell in core container
+shell:
+	@cd config && docker compose --project-name ceres exec postgres bash
+
+## deploy: Deploy CERES with full integration (auto-setup)
+deploy:
+	@echo "$(GREEN)Deploying CERES with service integration...$(NC)"
+	@bash setup-services.sh
+
+## deploy-prod: Deploy to production server (requires SSH_HOST, SSH_USER)
+deploy-prod:
+	@if [ -z "$(SSH_HOST)" ] || [ -z "$(SSH_USER)" ]; then \
+		echo "$(YELLOW)Usage: make deploy-prod SSH_HOST=192.168.1.3 SSH_USER=root$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(CYAN)Deploying to $(SSH_USER)@$(SSH_HOST)...$(NC)"
+	@bash scripts/remote-deploy.sh $(SSH_HOST) $(SSH_USER)
+
+## setup-integration: Setup OIDC integration and generate secrets
+setup-integration:
+	@echo "$(CYAN)Setting up service integration...$(NC)"
+	@bash setup-services.sh
+
+## verify-integration: Verify OIDC and service integration
+verify-integration:
+	@echo "$(CYAN)Verifying service integration...$(NC)"
+	@bash -c ' \
+		echo "Checking Keycloak OIDC discovery..."; \
+		curl -sf http://localhost:8080/auth/realms/master/.well-known/openid-configuration > /dev/null && echo "$(GREEN)✓ Keycloak OIDC working$(NC)" || echo "$(RED)✗ Keycloak OIDC failed$(NC)"; \
+		echo ""; \
+		echo "Service Status:"; \
+		cd config && docker compose --project-name ceres ps; \
+	'
 
 ## shell: Open shell in PostgreSQL container
 shell:

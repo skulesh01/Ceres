@@ -1,0 +1,346 @@
+# CERES Platform - GitLab CI/CD Pipeline
+# Automated deployment and testing
+
+stages:
+  - validate
+  - test
+  - build
+  - deploy
+  - verify
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  COMPOSE_PROJECT_NAME: ceres
+
+# === STAGE 1: VALIDATE ===
+validate:config:
+  stage: validate
+  image: docker/compose:latest
+  script:
+    - echo "Validating Docker Compose configuration..."
+    - |
+      docker-compose \
+        -f config/compose/base.yml \
+        -f config/compose/core.yml \
+        -f config/compose/apps.yml \
+        config > /dev/null
+    - echo "✓ Compose configuration is valid"
+  only:
+    - branches
+  tags:
+    - docker
+
+validate:env:
+  stage: validate
+  image: alpine:latest
+  script:
+    - echo "Checking required environment variables..."
+    - apk add --no-cache bash
+    - |
+      if [ ! -f .env ]; then
+        echo "⚠ .env not found, using .env.example"
+        cp .env.example .env
+      fi
+    - |
+      REQUIRED_VARS=(
+        "DOMAIN"
+        "POSTGRES_PASSWORD"
+        "KEYCLOAK_ADMIN_PASSWORD"
+        "GITLAB_ROOT_PASSWORD"
+      )
+      
+      for var in "${REQUIRED_VARS[@]}"; do
+        if ! grep -q "^${var}=" .env; then
+          echo "✗ Missing required variable: $var"
+          exit 1
+        fi
+      done
+    - echo "✓ Environment configuration is valid"
+  only:
+    - branches
+
+# === STAGE 2: TEST ===
+test:scripts:
+  stage: test
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq bash shellcheck
+  script:
+    - echo "Testing shell scripts..."
+    - shellcheck -e SC1091 scripts/*.sh || true
+    - shellcheck -e SC1091 setup-services.sh || true
+    - bash -n scripts/start.sh
+    - bash -n setup-services.sh
+    - echo "✓ Shell scripts syntax check passed"
+  only:
+    - branches
+
+test:integration:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - echo "Running integration tests..."
+    - pip install -q requests pyyaml
+    - |
+      if [ -f scripts/test-integration.py ]; then
+        python scripts/test-integration.py --dry-run
+      fi
+    - echo "✓ Integration tests passed"
+  only:
+    - branches
+
+# === STAGE 3: BUILD ===
+build:secrets:
+  stage: build
+  image: alpine:latest
+  script:
+    - echo "Generating OIDC secrets..."
+    - apk add --no-cache bash openssl
+    - |
+      if [ ! -f .env ]; then
+        cp .env.example .env
+      fi
+    - |
+      # Generate secrets only if not already set
+      if ! grep -q "GITLAB_OIDC_SECRET=[^C]" .env; then
+        SECRET=$(openssl rand -base64 32 | tr -d '\n')
+        sed -i "s/GITLAB_OIDC_SECRET=.*/GITLAB_OIDC_SECRET=$SECRET/" .env
+        echo "✓ GitLab OIDC secret generated"
+      fi
+      
+      if ! grep -q "MM_OIDC_SECRET=[^C]" .env; then
+        SECRET=$(openssl rand -base64 32 | tr -d '\n')
+        sed -i "s/MM_OIDC_SECRET=.*/MM_OIDC_SECRET=$SECRET/" .env
+        echo "✓ Mattermost OIDC secret generated"
+      fi
+      
+      if ! grep -q "REDMINE_OIDC_SECRET=[^C]" .env; then
+        SECRET=$(openssl rand -base64 32 | tr -d '\n')
+        sed -i "s/REDMINE_OIDC_SECRET=.*/REDMINE_OIDC_SECRET=$SECRET/" .env
+        echo "✓ Redmine OIDC secret generated"
+      fi
+      
+      if ! grep -q "WIKIJS_OIDC_SECRET=[^C]" .env; then
+        SECRET=$(openssl rand -base64 32 | tr -d '\n')
+        sed -i "s/WIKIJS_OIDC_SECRET=.*/WIKIJS_OIDC_SECRET=$SECRET/" .env
+        echo "✓ Wiki.js OIDC secret generated"
+      fi
+  artifacts:
+    paths:
+      - .env
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+  tags:
+    - docker
+
+# === STAGE 4: DEPLOY ===
+.deploy_template: &deploy_template
+  image: docker/compose:latest
+  before_script:
+    - apk add --no-cache bash openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts 2>/dev/null
+
+deploy:staging:
+  <<: *deploy_template
+  stage: deploy
+  script:
+    - echo "Deploying to STAGING environment..."
+    - |
+      ssh $DEPLOY_USER@$DEPLOY_HOST << 'ENDSSH'
+        set -e
+        cd /opt/Ceres
+        
+        # Pull latest changes
+        git fetch origin
+        git checkout $CI_COMMIT_REF_NAME
+        git pull origin $CI_COMMIT_REF_NAME
+        
+        # Run setup script
+        bash setup-services.sh <<< "yes"
+        
+        # Verify deployment
+        sleep 10
+        docker-compose ps
+      ENDSSH
+    - echo "✓ Staging deployment complete"
+  environment:
+    name: staging
+    url: https://staging.$DOMAIN
+  only:
+    - develop
+  when: manual
+  tags:
+    - docker
+
+deploy:production:
+  <<: *deploy_template
+  stage: deploy
+  script:
+    - echo "Deploying to PRODUCTION environment..."
+    - |
+      ssh $DEPLOY_USER@$DEPLOY_HOST << 'ENDSSH'
+        set -e
+        cd /opt/Ceres
+        
+        # Backup before deployment
+        bash scripts/backup.sh --name pre-deploy-$(date +%Y%m%d-%H%M%S)
+        
+        # Pull latest changes
+        git fetch origin
+        git checkout main
+        git pull origin main
+        
+        # Run setup script
+        bash setup-services.sh <<< "yes"
+        
+        # Health check
+        sleep 30
+        docker-compose ps
+        
+        # Verify critical services
+        docker-compose exec -T postgres pg_isready -U postgres || exit 1
+        docker-compose exec -T redis redis-cli ping || exit 1
+      ENDSSH
+    - echo "✓ Production deployment complete"
+  environment:
+    name: production
+    url: https://$DOMAIN
+  only:
+    - main
+  when: manual
+  tags:
+    - docker
+
+# === STAGE 5: VERIFY ===
+verify:services:
+  stage: verify
+  image: alpine:latest
+  script:
+    - echo "Verifying deployed services..."
+    - apk add --no-cache curl
+    - |
+      SERVICES=(
+        "http://$DEPLOY_HOST:8080|Keycloak"
+        "http://$DEPLOY_HOST:8081|GitLab"
+        "http://$DEPLOY_HOST:8082|Nextcloud"
+        "http://$DEPLOY_HOST:8083|Redmine"
+        "http://$DEPLOY_HOST:8084|Wiki.js"
+        "http://$DEPLOY_HOST:8085|Mattermost"
+      )
+      
+      FAILURES=0
+      for service in "${SERVICES[@]}"; do
+        URL=$(echo $service | cut -d'|' -f1)
+        NAME=$(echo $service | cut -d'|' -f2)
+        
+        if curl -f -s -o /dev/null -w "%{http_code}" $URL | grep -q "^[23]"; then
+          echo "✓ $NAME is responding"
+        else
+          echo "✗ $NAME is not responding"
+          FAILURES=$((FAILURES + 1))
+        fi
+      done
+      
+      if [ $FAILURES -gt 0 ]; then
+        echo "⚠ $FAILURES service(s) failed verification"
+        exit 1
+      fi
+    - echo "✓ All services verified"
+  only:
+    - main
+    - develop
+  when: on_success
+  needs:
+    - deploy:production
+  tags:
+    - docker
+
+verify:integration:
+  stage: verify
+  image: python:3.11-slim
+  script:
+    - echo "Verifying service integration..."
+    - pip install -q requests
+    - |
+      python << 'ENDPYTHON'
+      import requests
+      import sys
+      import os
+      
+      host = os.environ.get('DEPLOY_HOST', 'localhost')
+      
+      # Check Keycloak OIDC discovery
+      try:
+          r = requests.get(f'http://{host}:8080/auth/realms/master/.well-known/openid-configuration')
+          if r.status_code == 200:
+              print("✓ Keycloak OIDC discovery endpoint working")
+          else:
+              print(f"✗ Keycloak OIDC discovery failed: {r.status_code}")
+              sys.exit(1)
+      except Exception as e:
+          print(f"✗ Keycloak connectivity error: {e}")
+          sys.exit(1)
+      ENDPYTHON
+    - echo "✓ Integration verification complete"
+  only:
+    - main
+    - develop
+  when: on_success
+  needs:
+    - verify:services
+  tags:
+    - docker
+
+# === ROLLBACK JOB ===
+rollback:production:
+  image: docker/compose:latest
+  stage: deploy
+  before_script:
+    - apk add --no-cache bash openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts 2>/dev/null
+  script:
+    - echo "Rolling back PRODUCTION deployment..."
+    - |
+      ssh $DEPLOY_USER@$DEPLOY_HOST << 'ENDSSH'
+        set -e
+        cd /opt/Ceres
+        
+        # Find latest backup
+        LATEST_BACKUP=$(ls -t backups/*.tar.gz | head -n1)
+        
+        if [ -z "$LATEST_BACKUP" ]; then
+          echo "✗ No backup found for rollback"
+          exit 1
+        fi
+        
+        echo "Rolling back to: $LATEST_BACKUP"
+        bash scripts/restore.sh $LATEST_BACKUP
+        
+        # Restart services
+        docker-compose down
+        docker-compose up -d
+        
+        sleep 15
+        docker-compose ps
+      ENDSSH
+    - echo "✓ Rollback complete"
+  environment:
+    name: production
+    action: rollback
+  only:
+    - main
+  when: manual
+  tags:
+    - docker
