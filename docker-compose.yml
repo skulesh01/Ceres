@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # CERES CLI builder - builds without local Go installation
+  ceres-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    image: ceres-builder:latest
+    volumes:
+      - ./bin:/build/bin
+      - ./examples:/build/examples
+    command: >
+      sh -c "
+        echo '🏗️  Building CERES CLI for all platforms...' &&
+        make build-all &&
+        echo '✅ Build complete! Binaries in ./bin/' &&
+        ls -lh /build/bin/
+      "
+
+  # CERES CLI runtime
+  ceres:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ceres:latest
+    volumes:
+      - ~/.kube:/home/ceres/.kube:ro
+      - ~/.ceres:/home/ceres/.ceres
+      - ./infrastructure:/app/infrastructure
+      - ./deployment:/app/deployment
+    environment:
+      - KUBECONFIG=/home/ceres/.kube/config
+    command: ["--help"]
+
+  # Development environment with hot reload
+  ceres-dev:
+    image: golang:1.21-alpine
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - go-cache:/go/pkg/mod
+    environment:
+      - GO111MODULE=on
+    command: >
+      sh -c "
+        apk add --no-cache make git &&
+        go mod download &&
+        echo '🔄 Development environment ready!' &&
+        echo 'Run: docker-compose run ceres-dev make run' &&
+        tail -f /dev/null
+      "
+
+volumes:
+  go-cache:

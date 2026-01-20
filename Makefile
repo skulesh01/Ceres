@@ -1,6 +1,6 @@
 # CERES Makefile
 
-.PHONY: help build run test clean install lint fmt
+.PHONY: help build run test clean install lint fmt docker-build docker-run setup-go
 
 # Variables
 BINARY_NAME=ceres
@@ -12,10 +12,31 @@ BIN_DIR=./bin
 help: ## Show this help message
 	@echo "CERES v3.0.0 - Build Commands"
 	@echo "================================"
+	@echo "🐳 Docker builds (no local Go required):"
+	@echo "  make docker-build  - Build using Docker"
+	@echo "  make docker-run    - Run in Docker"
+	@echo ""
+	@echo "🔧 Local builds (requires Go 1.21+):"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build CLI binary
+docker-build: ## Build using Docker (no local Go required)
+	@echo "🐳 Building with Docker..."
+	@docker build -t ceres-builder:latest --target builder .
+	@mkdir -p bin
+	@docker create --name ceres-temp ceres-builder:latest
+	@docker cp ceres-temp:/build/bin/. ./bin/
+	@docker rm ceres-temp
+	@echo "✅ Docker build complete! Binaries in ./bin/"
+
+docker-run: ## Run CERES CLI in Docker
+	@docker-compose run --rm ceres
+
+setup-go: ## Auto-install Go on target system
+	@bash scripts/setup-go.sh
+
+build: ## Build CLI binary (requires Go 1.21+)
 	@echo "🔨 Building CERES CLI..."
+	@echo "💡 Tip: Use 'make docker-build' if Go is not installed"
 	$(GO) build -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "✅ Binary created: $(BIN_DIR)/$(BINARY_NAME)"
 
