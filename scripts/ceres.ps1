@@ -1441,4 +1441,46 @@ function Get-ServiceLogs { param($Service) }
 # EXECUTION
 # ============================================================================
 
+function Main {
+    # Show version if requested
+    if ($Version) {
+        Write-Host "CERES CLI v$script:CeresVersion"
+        exit 0
+    }
+
+    # If no command or "interactive", launch wizard
+    if ([string]::IsNullOrEmpty($Command) -or $Command -eq "interactive") {
+        Invoke-InteractiveWizard
+        exit 0
+    }
+
+    # Route to command handlers
+    switch ($Command.ToLower()) {
+        "help" { Invoke-HelpCommand $Subcommand }
+        "init" { Invoke-InitCommand }
+        "analyze" { Invoke-AnalyzeCommand }
+        "configure" { Invoke-ConfigureCommand }
+        "generate" { Invoke-GenerateCommand }
+        "validate" { Invoke-ValidateCommand }
+        "start" { Invoke-StartCommand }
+        "stop" { Invoke-StopCommand }
+        "status" { Invoke-StatusCommand }
+        "backup" { Invoke-BackupCommand }
+        "restore" { Invoke-RestoreCommand }
+        "deploy" { Invoke-DeployCommand }
+        "logs" { Invoke-LogsCommand }
+        "rollback" { Invoke-RollbackCommand }
+        "setup" { Invoke-SetupCommand }
+        "user" { Invoke-UserCommand }
+        "vpn" { Invoke-VpnCommand }
+        "k8s" { Invoke-K8sCommand }
+        default {
+            Write-CeresLog "Unknown command: $Command" "ERROR"
+            Show-MainHelp
+            exit 1
+        }
+    }
+}
+
 Main
+
