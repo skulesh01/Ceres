@@ -1,0 +1,28 @@
+platform:
+  name: CERES
+  version: 3.0.0
+  domain: ceres.local
+  environment: production
+
+cloud:
+  provider: aws
+  region: eu-west-1
+  project: ceres-prod
+
+services:
+  postgresql:
+    enabled: true
+    version: "16"
+    database: ceres
+  
+  redis:
+    enabled: true
+    version: "7.0"
+  
+  keycloak:
+    enabled: true
+    replicas: 3
+  
+  gitlab:
+    enabled: true
+    replicas: 1

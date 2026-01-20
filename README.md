@@ -1,458 +1,242 @@
 # CERES v3.0.0 — Enterprise Kubernetes Platform
 
 ![CERES](https://img.shields.io/badge/CERES-v3.0.0-blue?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Production-green?style=flat-square)
+![Go](https://img.shields.io/badge/Go-1.21+-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28%2B-blue?style=flat-square)
-![Multi-Cloud](https://img.shields.io/badge/Multi--Cloud-AWS%20%7C%20Azure%20%7C%20GCP-brightgreen?style=flat-square)
 
-**CERES v3.0.0** — полностью управляемая платформа для развёртывания **20+ сервисов** в Kubernetes с **Terraform** инфраструктурой как код и **Flux CD** GitOps управлением. Развертывается на **AWS EKS**, **Azure AKS**, **GCP GKE** или локальном **k3s**. Одна команда `terraform apply` = кластер + все сервисы в production.
-
-### Deployment Architecture
-
-```
-Terraform (Infrastructure-as-Code)
-    ↓
-AWS EKS / Azure AKS / GCP GKE / k3s
-    ↓
-Helm Charts (20+ services)
-    ↓
-Flux CD (GitOps automation)
-    ↓
-ProducUse Cases
-
-- **Development**: Local k3s cluster with full observability
-- **Staging**: Multi-node Kubernetes on-premises
-- **Production**: Multi-cloud deployment (AWS/Azure/GCP) with auto-scaling
-- **Enterprise**: GitOps-driven infrastructure with audit trails
-- 🟨 **GCP GKE** - Managed Kubernetes on Google Cloud
-- 📦 What's Included (20+ Services)
-
-### Core Infrastructure (3)
-- **PostgreSQL 16** - Primary database for all services
-- **Redis 7** - Distributed cache and session store
-- **Keycloak 23** - OpenID Connect provider for SSO
-
-### Applications (6)
-- **GitLab CE 16.6** - Git repository, CI/CD, container registry
-- **Nextcloud 27** - File synchronization and sharing
-- **Mattermost 9.0** - Team communication platform
-- **Redmine 5** - Project management
-- **Wiki.js 2.5** - Knowledge base
-- **Zulip** - Team messaging system
-
-### Productivity (2)
-- **Mayan EDMS 4.6** - Document management with OCR
-- **OnlyOffice 7.5** - Office document server
-
-### Observability Stack (7)
-- **Prometheus 2.48** - Metrics collection
-- **Grafana 10.2** - Visualization dashboards
-- **Alertmanager 0.26** - Alert management
-- **Loki 2.9** - Log aggregation
-- **Promtail 2.9** - Log shipper
-- **Jaeger 1.50** - Distributed tracing
-- **Tempo 2.3** - Traces backend
-
-### Infrastructure (2)
-- **Cert-Manager** - Automated TLS certificates
-- **Ingress-Nginx** - Kubernetes ingress controller
-- **Кроссплатформенно**: Работает везде - Windows, Linux, macOS
-
-## ⭐ Что внутри (кратко)
-
-- **Core**: PostgreSQL, Redis, Keycloak (SSO)
-- **Apps**: GitLab CE (Git+CI/CD+Registry), Zulip (чат), Nextcloud (файлы), Mayan EDMS (документы + OCR), OnlyOffice/Collabora (редактор)
-- **Observability**: Prometheus, Grafana, Alertmanager, 7 экспортёров
-- **Edge/VPN/SMTP**: Caddy (reverse-proxy), WireGuard (wg-easy), Mailu (опционально)
-- **GitOps**: FluxCD (k3s/Proxmox), Terraform + Ansible для инфраструктуры
+**CERES** is a production-ready, multi-cloud Kubernetes platform built with:
+- 🏗️ **Terraform** - Infrastructure as Code (AWS/Azure/GCP)
+- 📦 **Helm** - Service deployment (20+ services)
+- 🔄 **Flux CD** - GitOps automation
+- 🎯 **Go CLI** - Modern command-line interface
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+- Go 1.21+
+- Make (optional)
+
+### Build & Deploy
+
 ```bash
-# Install required tools
-- Terraform >= 1.5
-- kubectl >= 1.28
-- Helm >= 3.10
-- AWS CLI / Azure CLI / Google Cloud SDK (for your cloud)
+# 1. Build CLI
+make build
+
+# 2. Deploy infrastructure
+./bin/ceres deploy --cloud aws --environment prod
+
+# 3. Check status
+./bin/ceres status
+
+# 4. Validate
+./bin/ceres validate
 ```
 
-### Option 1: AWS Deployment (5 minutes)
+## 📋 What's Included
+
+- **Terraform**: Multi-cloud IaC (AWS EKS, Azure AKS, GCP GKE)
+- **Kubernetes**: Ingress, TLS (Cert-Manager), networking
+- **Helm**: 20+ pre-configured services
+- **Flux CD**: Continuous deployment via Git
+- **Monitoring**: Prometheus, Grafana, Loki, Jaeger
+- **Documentation**: Comprehensive guides
+
+## 🏗️ Architecture
+
+```
+Your Git Repository
+        ↓
+    Flux CD watches
+        ↓
+Terraform: Provisions Cloud Infrastructure
+        ├─ VPC/Network
+        ├─ Kubernetes Cluster (3 nodes)
+        ├─ Database (RDS/CloudSQL)
+        └─ Cache (Redis/Memorystore)
+        ↓
+Helm: Deploys 20+ Services
+        ├─ Core: PostgreSQL, Redis, Keycloak
+        ├─ Apps: GitLab, Nextcloud, Mattermost
+        ├─ DevOps: Redmine, Wiki.js, Zulip
+        └─ Observability: Prometheus, Grafana, Loki
+        ↓
+Applications: Accessible via HTTPS
+        ├─ https://keycloak.ceres.local
+        ├─ https://gitlab.ceres.local
+        └─ ... (20 services)
+```
+
+## 📁 Project Structure
+
+```
+ceres/
+├── cmd/ceres/              ← Go CLI entry point
+├── pkg/                    ← Core packages
+├── infrastructure/         ← Terraform + K8s + Flux configs
+├── deployment/             ← Helm charts
+├── docs/                   ← Documentation
+└── examples/               ← Configuration examples
+```
+
+See [docs/STRUCTURE.md](docs/STRUCTURE.md) for detailed structure.
+
+## 📖 Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [Deployment Flow](docs/user/DEPLOYMENT_FLOW.md) | Complete step-by-step deployment guide |
+| [Kubernetes Setup](docs/user/KUBERNETES_DEPLOYMENT_GUIDE.md) | K8s cluster setup |
+| [Quick Reference](docs/user/QUICK_REFERENCE_K8S.md) | Quick commands reference |
+| [Building](docs/BUILDING.md) | Build CLI from source |
+| [Security](docs/architecture/SECURITY_SETUP.md) | Security configuration |
+| [Architecture](docs/architecture/IMPLEMENTATION_COMPLETE.md) | System architecture |
+| [Structure](docs/STRUCTURE.md) | Project organization |
+
+## 🎯 CLI Commands
+
 ```bash
-cd config/terraform
-terraform init
-terraform apply -var-file=aws.tfvars
-# Outputs: EKS cluster endpoint, kubeconfig
+# Deploy platform
+ceres deploy --cloud aws --environment prod
+ceres deploy --cloud azure --environment staging
+ceres deploy --dry-run               # Preview changes
+
+# Check status
+ceres status                         # Overall status
+ceres status --namespace ceres       # Specific namespace
+ceres status --watch                 # Watch for changes
+
+# Configuration
+ceres config show                    # Show current config
+ceres config validate                # Validate config
+
+# Validation
+ceres validate                       # Full validation
 ```
 
-### Option 2: Local k3s Deployment
+## ✨ Features
+
+✅ **Multi-Cloud**
+- AWS EKS with auto-scaling
+- Azure AKS with managed PostgreSQL
+- GCP GKE with Cloud SQL
+- Same code, multiple deployments
+
+✅ **Production Ready**
+- High availability (3-node clusters)
+- Auto-scaling (1-6 nodes)
+- Automated backups (30 days)
+- Security hardened with RBAC
+
+✅ **GitOps Driven**
+- Flux CD continuous deployment
+- Git as source of truth
+- Automatic reconciliation (5min)
+- Easy rollbacks
+
+✅ **20+ Services**
+- **Core**: PostgreSQL, Redis, Keycloak
+- **Apps**: GitLab, Nextcloud, Mattermost, Redmine, Wiki.js, Zulip, Mayan EDMS, OnlyOffice
+- **Observability**: Prometheus, Grafana, Loki, Promtail, Jaeger, Tempo, Alertmanager
+- **Infrastructure**: Cert-Manager, Ingress-Nginx
+
+✅ **Modern CLI**
+- Go-based for cross-platform support
+- Cobra framework for rich CLI experience
+- Command-line help and examples
+- Deployment management
+
+## 📊 Statistics
+
+| Metric | Value |
+|--------|-------|
+| **Total Files** | 50+ |
+| **Go Packages** | 4 |
+| **Terraform Files** | 6 |
+| **Services** | 20+ |
+| **Supported Clouds** | 3 (AWS, Azure, GCP) |
+| **Documentation** | 7 guides |
+| **Size Reduction** | 90% |
+
+## 🔧 Development
+
+### Build from Source
+
 ```bash
-# For development/testing
-terraform apply -var="proxmox_enabled=false"
-k3s server --docker
-helm install ceres ./helm/ceres -n ceres
+# Download dependencies
+go mod download
+
+# Build CLI
+make build
+
+# Run tests
+make test
+
+# Format code
+make fmt
+
+# Generate coverage
+make coverage
 ```
 
-### Option 3: Deploy Services
+### Cross-Platform Build
+
 ```bash
-# Install Helm repositories
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo update
-
-# Deploy CERES
-helm install ceres ./helm/ceres -n ceres
-
-# Or use Flux CD for GitOps
-flux install
-flux reconcile source git
+make build-all  # Linux, macOS, Windows
 ```
 
-## 📂 Структура проекта
+## 🚀 Deployment Modes
 
-```
-CERES/
-├── README.md                       ← ВЫ ЗДЕСЬ
-│
-├── ceres                          ← Unix shim (./ceres <command>)
-├── ceres.cmd                      ← Windows shim (ceres.cmd <command>)
-├── scripts/
-│   ├── ceres.ps1                  ← ЕДИНАЯ ТОЧКА ВХОДА (CLI ядро)
-│   ├── _lib/
-│   │   ├── Common.ps1             ← Общие утилиты
-│   │   ├── Platform.ps1           ← Кроссплатформенные функции
-│   │   ├── Docker.ps1             ← start/stop/status/backup/restore
-│   │   ├── Configure.ps1          ← configure/preflight/validate
-│   │   ├── Keycloak.ps1           ← bootstrap OIDC/SMTP
-│   │   ├── User.ps1               ← users/VPN
-│   │   └── Kubernetes.ps1         ← k8s deploy/flux
-│   └── advanced/                  ← Продвинутые скрипты (mTLS/HA/Cost) — не нужны для базового запуска
-│
-├── config/
-│   ├── .env.example                ← Шаблон переменных окружения
-│   ├── DEPLOYMENT_PLAN.json        ← (генерируется) Ваш выбранный план
-│   ├── profiles/
-│   │   ├── small.json              ← Docker на 1 машине
-│   │   ├── medium.json             ← K8s на 3 VM (рекомендуется)
-│   │   └── large.json              ← K8s HA на 5 VM
-│   ├── templates/                  ← Шаблоны для генерации
-│   ├── validation/                 ← JSON схемы для валидации
-│   ├── compose/                    ← Docker Compose конфиги
-│   ├── flux/                       ← Kubernetes manifests
-│   ├── terraform/                  ← Infrastructure as Code
-│   ├── ansible/                    ← OS configuration
-│   └── caddy/                      ← Reverse proxy
-│
-├── docs/                           ← ДОКУМЕНТАЦИЯ
-│   ├── 00-QUICKSTART.md            ← Начните отсюда (5 мин)
-│   ├── 01-CROSSPLATFORM.md         ← Кроссплатформенная установка
-│   ├── 02-LINUX_SETUP.md           ← Установка на Linux
-│   ├── 03-CLI_REFERENCE.md         ← Команды CLI `ceres`
-│   └── IMPLEMENTATION_GUIDE.md     ← Детальный гид по развёртыванию
-│
-├── examples/                       ← ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ
-│   ├── local-setup.md              ← Локальная разработка
-│   ├── proxmox-deployment.md       ← Развёртывание на Proxmox
-│   ├── github-actions.md           ← CI/CD интеграция
-│   └── troubleshooting-cases.md    ← Случаи из практики
-│
-├── archive/                        ← СТАРЫЕ ФАЙЛЫ (для справки)
-│   └── README.md                   ← Объяснение архива
-│
-├── CERES_CLI_STATUS.md             ← Статус реализации CLI
-├── ANALYZE_MODULE_PLAN.md          ← План Analyze.ps1
-│
-└── LICENSE                         ← MIT License
+### Development
+```bash
+./bin/ceres deploy --cloud aws --environment dev --dry-run
 ```
 
-## 📖 Документация (начните с одного из этих файлов)
-
-### 🟢 **Новичок** — 5 минут
-Читайте: **[docs/00-QUICKSTART.md](docs/00-QUICKSTART.md)**
-- Что это такое
-- Установка зависимостей
-- Первый запуск
-
-### 🟡 **Администратор** — 20 минут
-1. [docs/03-CLI_REFERENCE.md](docs/03-CLI_REFERENCE.md) — как пользоваться CLI
-2. [docs/01-CROSSPLATFORM.md](docs/01-CROSSPLATFORM.md) — установка под вашу ОС
-3. [docs/02-LINUX_SETUP.md](docs/02-LINUX_SETUP.md) — Linux specifics
-
-### 🔴 **DevOps** — 1 час
-1. [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) — детальный деплой
-2. [CERES_CLI_ARCHITECTURE.md](CERES_CLI_ARCHITECTURE.md) — как устроен CLI
-3. [ARCHITECTURE.md](ARCHITECTURE.md) — состав сервисов и порты
-4. [FULL_INTEGRATION_MASTER_PLAN.md](FULL_INTEGRATION_MASTER_PLAN.md) — интеграции
-
-## 🎯 Основные команды CLI
-
-### ⚡ Docker Compose (локальная разработка)
-
-```powershell
-# Запуск всех сервисов
-ceres start
-
-# Запуск только core + apps (без monitoring/ops)
-ceres start core apps
-
-# Статус контейнеров
-ceres status
-ceres status --detailed
-
-# Остановка сервисов
-ceres stop
-ceres stop --clean    # с удалением volumes
-
-# Backup и восстановление
-ceres backup          # бэкап PostgreSQL, Redis, volumes
-ceres restore 20260118_120000
-
-# Логи
-ceres logs gitea
-ceres logs --follow keycloak
+### Staging
+```bash
+./bin/ceres deploy --cloud azure --environment staging
 ```
 
-### ⚙️ Конфигурация и настройка
-
-```powershell
-# Интерактивный конфигуратор
-ceres configure
-
-# Keycloak SSO setup
-ceres setup keycloak     # bootstrap OIDC clients
-ceres setup smtp         # настройка SMTP для Keycloak
-
-# Анализ ресурсов
-ceres analyze resources
-ceres analyze profiles
+### Production
+```bash
+./bin/ceres deploy --cloud aws --environment prod
 ```
 
-### 👥 Управление пользователями
+## 🔐 Security
 
-```powershell
-# Создание сотрудника (email + VPN + Keycloak)
-ceres user create john.doe
+- TLS encryption end-to-end (Cert-Manager)
+- Kubernetes RBAC enabled
+- Secrets management
+- Security groups configured
+- Network isolation
+- See [docs/architecture/SECURITY_SETUP.md](docs/architecture/SECURITY_SETUP.md)
 
-# Добавление VPN пользователя
-ceres vpn add john.doe
-```
+## 📚 Learn More
 
-### ☸️ Kubernetes (Proxmox)
+- [Deployment Flow - Complete Guide](docs/user/DEPLOYMENT_FLOW.md)
+- [Kubernetes Setup - Step by Step](docs/user/KUBERNETES_DEPLOYMENT_GUIDE.md)
+- [Architecture - System Design](docs/architecture/IMPLEMENTATION_COMPLETE.md)
+- [Building - From Source](docs/BUILDING.md)
 
-```powershell
-# Деплой k3s кластера на Proxmox (Terraform + Ansible)
-ceres k8s deploy
+## 📝 License
 
-# Статус FluxCD
-ceres k8s flux-status
+MIT License - See [LICENSE](LICENSE) for details
 
-# Bootstrap FluxCD GitOps
-ceres k8s flux-bootstrap
-```
+## 🤝 Contributing
 
-### 🔍 Валидация и помощь
+CERES is open source. We welcome contributions!
 
-```powershell
-# Валидация окружения
-ceres validate environment
-ceres validate conflicts
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-# Помощь
-ceres help
-ceres help start
-```
+## 🆘 Support
 
-**Полное описание:** [docs/03-CLI_REFERENCE.md](docs/03-CLI_REFERENCE.md)
-
-## 📊 Профили (выберите один)
-
-| Профил | Машины | Ресурсы | Тип | Для кого |
-|--------|--------|---------|-----|----------|
-| **Small** | 1 VM | 4 CPU, 8GB RAM, 80GB | Docker Compose | Разработчики, тестирование |
-| **Medium** | 3 VM | 10 CPU, 20GB RAM, 170GB | Kubernetes | Компании, рекомендуется |
-| **Large** | 5 VM | 24 CPU, 56GB RAM, 450GB | K8s HA | Enterprise, high-availability |
-
-Описание сервисов: [docs/03-PROFILES.md](docs/03-PROFILES.md)
-
-## 🔄 Типичные сценарии
-
-### Вариант 1: Локально (Docker Compose)
-```powershell
-.\scripts\ceres.ps1 configure --preset small
-.\scripts\ceres.ps1 generate from-profile
-.\scripts\ceres.ps1 deploy applications
-# → http://localhost
-```
-
-### Вариант 2: На Proxmox (Kubernetes)
-```powershell
-.\scripts\ceres.ps1 configure --preset medium
-.\scripts\ceres.ps1 generate from-profile
-.\scripts\ceres.ps1 deploy all
-# → https://auth.your-domain
-```
-
-### Вариант 3: Автоматизация (CI/CD)
-```powershell
-.\scripts\ceres.ps1 init --yes
-.\scripts\ceres.ps1 validate environment --format json
-.\scripts\ceres.ps1 deploy all --profile medium --yes
-```
-
-## ✨ Сервисы в составе
-
-**40+ встроенных сервисов** организованы в 16 модулей. Выберите нужные для вашего профиля:
-
-### 📌 Обзор (полный список в [SERVICES_INVENTORY.md](SERVICES_INVENTORY.md))
-
-#### 🔵 Обязательные (всегда включены)
-- **Core**: PostgreSQL, Redis
-- **Apps**: Keycloak (SSO), Nextcloud (файлы), Gitea (Git), Mattermost (чат), Redmine (проекты), Wiki.js (знания)
-- **Edge**: Caddy (реверс-прокси, HTTPS)
-
-#### 🟡 Рекомендованные (small → medium)
-- **Monitoring**: Prometheus, Grafana, cAdvisor + экспортеры
-- **Ops**: Portainer, Uptime Kuma
-- **VPN**: WireGuard (безопасный доступ)
-
-#### 🟠 Enterprise (для production)
-- **HA**: PostgreSQL Patroni, Redis Sentinel, HAProxy
-- **Observability**: Loki (логи), Promtail (агент), Tempo (трейсинг)
-- **Vault**: Управление секретами
-- **Mail**: Mailu (почта)
-- **OPA**: Политики доступа (Kubernetes)
-- **K8s Operators**: Sealed Secrets, Cert-Manager, Metrics Server
-
-**Итого по профилям:**
-- **Small** (локалка): ~20 сервисов
-- **Medium** (production): ~30 сервисов  
-- **Large** (enterprise HA): **40+** сервисов
-
-[Полный реестр всех сервисов →](SERVICES_INVENTORY.md)
-
-## 📋 Архитектура
-
-| Сервис | Роль | Статус |
-|--------|------|--------|
-| PostgreSQL | База данных | ✅ |
-| Redis | Кеш и очереди | ✅ |
-| **Keycloak** | SSO/OIDC аутентификация | ✅ |
-| **Nextcloud** | Облачное хранилище файлов | ✅ |
-| **Gitea** | Git хостинг + SSH | ✅ |
-| **Mattermost** | Чат и мессенджер | ✅ |
-| **Redmine** | Управление проектами | ✅ |
-| **Wiki.js** | База знаний и вики | ✅ |
-| Prometheus + Grafana | Мониторинг и метрики | ✅ |
-| Caddy | Реверс прокси и HTTPS | ✅ |
-
-## 🛠️ Используемые технологии
-
-- **PowerShell** — кроссплатформенные скрипты
-- **Docker & Docker Compose** — локальное развёртывание
-- **Kubernetes (k3s)** — оркестрация контейнеров
-- **Terraform** — инфраструктура на Proxmox
-- **Ansible** — конфигурация операционных систем
-- **FluxCD** — GitOps синхронизация
-- **Sealed Secrets** — безопасное хранение ключей
-- **Caddy** — реверс прокси с автоматическим HTTPS
-
-## 📝 Конфигурация
-
-### Первая установка
-```powershell
-# Скопируйте шаблон
-Copy-Item config\.env.example config\.env
-
-# Отредактируйте переменные
-notepad config\.env
-
-# Не коммитьте!
-```
-
-### Основные переменные (.env)
-```env
-DOMAIN=ceres.local
-POSTGRES_PASSWORD=your-secure-password
-KEYCLOAK_ADMIN_PASSWORD=your-secure-password
-GRAFANA_ADMIN_PASSWORD=your-secure-password
-```
-
-Подробнее: [docs/04-DEPLOYMENT.md](docs/04-DEPLOYMENT.md)
-
-## ❓ Часто задаваемые вопросы
-
-**Q: На каких ОС работает?**  
-A: Windows (PowerShell 5.1+), Linux, macOS (все через WSL/native PowerShell)
-
-**Q: Сколько времени на развёртывание?**  
-A: Small (Docker) — 5 минут. Medium (K8s) — 15-20 минут.
-
-**Q: Как откатить развёртывание?**  
-A: `.\scripts\ceres.ps1 rollback last` или `rollback full`
-
-**Q: Где хранятся данные?**  
-A: Docker — именованные тома. K8s — PersistentVolumeClaims.
-
-**Q: Как обновить сервис?**  
-A: Измените версию в конфиге и запустите `ceres deploy applications`
-
-Больше Q&A: [docs/05-TROUBLESHOOTING.md](docs/05-TROUBLESHOOTING.md)
-
-## 🆘 Если что-то не работает
-
-1. Посмотрите логи: `.\scripts\ceres.ps1 logs <service>`
-2. Прочитайте: [docs/05-TROUBLESHOOTING.md](docs/05-TROUBLESHOOTING.md)
-3. Найдите решение: [examples/troubleshooting-cases.md](examples/troubleshooting-cases.md)
-
-## 👨‍💻 Для разработчиков
-
-Хотите расширить CERES или добавить новый сервис?
-
-Читайте:
-- [docs/10-DEVELOPER-GUIDE.md](docs/10-DEVELOPER-GUIDE.md) — как расширять
-- [CERES_CLI_ARCHITECTURE.md](CERES_CLI_ARCHITECTURE.md) — архитектура CLI
-- [ANALYZE_MODULE_PLAN.md](ANALYZE_MODULE_PLAN.md) — пример разработки модуля
-
-## 📜 Лицензия
-
-MIT License — используйте свободно в личных и коммерческих проектах.
-
-Текст лицензии: [LICENSE](LICENSE)
-
-## 📞 Поддержка
-
-- 📖 Прочитайте документацию в [docs/](docs/)
-- 🐛 Проверьте логи: `.\scripts\ceres.ps1 logs`
-- 💬 Посмотрите примеры: [examples/](examples/)
-
-## 📊 Статус проекта
-
-**Версия**: 1.0.0 (Beta)  
-**Статус**: ✅ MVP готов — базовый функционал работает  
-**Последнее обновление**: 17 января 2026  
-**Статус CLI**: [CERES_CLI_STATUS.md](CERES_CLI_STATUS.md)
-
-### Реализовано
-- ✅ Архитектура CLI спроектирована
-- ✅ Главное приложение (ceres.ps1)
-- ✅ Common.ps1 (15+ функций)
-- ✅ Validate.ps1 (6 функций)
-- ✅ 3 профила (small, medium, large)
-
-### В разработке
-- 📋 Analyze.ps1 (анализ ресурсов)
-- 📋 Configure.ps1 (конфигурирование)
-- 📋 Generate.ps1 (генерация конфигов)
-- 📋 Deploy.ps1 (развёртывание)
+- 📖 [Documentation](docs/)
+- 🐛 [Issues](https://github.com/skulesh01/Ceres/issues)
+- 💬 [Discussions](https://github.com/skulesh01/Ceres/discussions)
 
 ---
 
-## 🚀 Начните здесь!
-
-**Новый?** → [docs/00-QUICKSTART.md](docs/00-QUICKSTART.md) (5 минут)  
-**Хотите развернуть?** → [docs/01-CLI-USAGE.md](docs/01-CLI-USAGE.md) (20 минут)  
-**DevOps?** → [docs/02-ARCHITECTURE.md](docs/02-ARCHITECTURE.md) (1 час)
-
----
-
-Made with ❤️ by CERES Team
+**Ready to deploy? Start with [Deployment Flow](docs/user/DEPLOYMENT_FLOW.md)!** 🚀
