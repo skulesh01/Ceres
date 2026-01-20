@@ -1,0 +1,218 @@
+# ============================================================================
+# CERES Kubernetes Ingress Configuration
+# ============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ceres-ingress
+  namespace: ceres
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: ceres-tls-wildcard
+      hosts:
+        - ceres.local
+        - "*.ceres.local"
+  rules:
+    # Keycloak
+    - host: keycloak.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+    
+    # GitLab
+    - host: gitlab.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitlab
+                port:
+                  number: 80
+    
+    # Nextcloud
+    - host: nextcloud.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nextcloud
+                port:
+                  number: 80
+    
+    # Mattermost
+    - host: mattermost.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mattermost
+                port:
+                  number: 8000
+    
+    # Redmine
+    - host: redmine.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: redmine
+                port:
+                  number: 3000
+    
+    # Wiki.js
+    - host: wiki.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wiki
+                port:
+                  number: 3000
+    
+    # Prometheus
+    - host: prometheus.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
+    
+    # Grafana
+    - host: grafana.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+    
+    # Alertmanager
+    - host: alertmanager.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: alertmanager
+                port:
+                  number: 9093
+    
+    # Loki
+    - host: loki.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: loki
+                port:
+                  number: 3100
+    
+    # Jaeger
+    - host: jaeger.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jaeger
+                port:
+                  number: 16686
+    
+    # Tempo
+    - host: tempo.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tempo
+                port:
+                  number: 3200
+    
+    # Mayan EDMS
+    - host: mayan.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mayan
+                port:
+                  number: 8000
+    
+    # OnlyOffice
+    - host: office.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: onlyoffice
+                port:
+                  number: 80
+    
+    # Zulip
+    - host: zulip.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: zulip
+                port:
+                  number: 80
+
+---
+# Let's Encrypt ClusterIssuer for automated TLS
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@ceres.local
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx

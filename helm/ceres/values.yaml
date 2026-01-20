@@ -1,0 +1,473 @@
+# ============================================================================
+# CERES Helm Chart - Global Values
+# ============================================================================
+
+global:
+  domain: ceres.local
+  environment: production
+  imageRegistry: docker.io
+  imagePullPolicy: IfNotPresent
+  
+  # Image pull secrets for private registries
+  imagePullSecrets: []
+
+# ============================================================================
+# PostgreSQL Database
+# ============================================================================
+
+postgresql:
+  enabled: true
+  auth:
+    username: ceres
+    password: changeme
+    database: ceres
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClassName: standard
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# ============================================================================
+# Redis Cache
+# ============================================================================
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: changeme
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+  replica:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 10Gi
+  metrics:
+    enabled: true
+
+# ============================================================================
+# Keycloak (OIDC Provider)
+# ============================================================================
+
+keycloak:
+  enabled: true
+  replicas: 3
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "23.0.0"
+  auth:
+    adminUser: admin
+    adminPassword: changeme
+  postgresql:
+    enabled: false
+    host: postgresql
+    port: 5432
+    database: keycloak
+    username: keycloak
+    password: changeme
+  service:
+    type: ClusterIP
+    port: 8080
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: keycloak.ceres.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: keycloak-tls
+        hosts:
+          - keycloak.ceres.local
+
+# ============================================================================
+# GitLab
+# ============================================================================
+
+gitlab:
+  enabled: true
+  replicas: 1
+  image:
+    repository: gitlab/gitlab-ce
+    tag: "16.6.0-ce.0"
+  persistence:
+    size: 50Gi
+    storageClassName: standard
+  postgresql:
+    host: postgresql
+    database: gitlab
+    username: gitlab
+    password: changeme
+  redis:
+    host: redis
+    port: 6379
+  externalUrl: https://gitlab.ceres.local
+  initialRootPassword: changeme
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: gitlab.ceres.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: gitlab-tls
+        hosts:
+          - gitlab.ceres.local
+
+# ============================================================================
+# Nextcloud
+# ============================================================================
+
+nextcloud:
+  enabled: true
+  replicas: 2
+  image:
+    repository: nextcloud
+    tag: "27.1.0-apache"
+  persistence:
+    size: 100Gi
+    storageClassName: standard
+  postgresql:
+    host: postgresql
+    database: nextcloud
+    username: nextcloud
+    password: changeme
+  redis:
+    host: redis
+    port: 6379
+  admin:
+    username: admin
+    password: changeme
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: nextcloud.ceres.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: nextcloud-tls
+        hosts:
+          - nextcloud.ceres.local
+
+# ============================================================================
+# Mattermost
+# ============================================================================
+
+mattermost:
+  enabled: true
+  replicas: 2
+  image:
+    repository: mattermost/mattermost-team-edition
+    tag: "9.0.0"
+  postgresql:
+    host: postgresql
+    database: mattermost
+    username: mattermost
+    password: changeme
+  redis:
+    host: redis
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: mattermost.ceres.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mattermost-tls
+        hosts:
+          - mattermost.ceres.local
+
+# ============================================================================
+# Redmine
+# ============================================================================
+
+redmine:
+  enabled: true
+  replicas: 1
+  image:
+    repository: redmine
+    tag: "5.0-alpine"
+  postgresql:
+    host: postgresql
+    database: redmine
+    username: redmine
+    password: changeme
+  persistence:
+    size: 20Gi
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: redmine.ceres.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: redmine-tls
+        hosts:
+          - redmine.ceres.local
+
+# ============================================================================
+# Wiki.js
+# ============================================================================
+
+wiki:
+  enabled: true
+  replicas: 1
+  image:
+    repository: requarks/wiki
+    tag: "2.5.303"
+  postgresql:
+    host: postgresql
+    database: wiki
+    username: wiki
+    password: changeme
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: wiki.ceres.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: wiki-tls
+        hosts:
+          - wiki.ceres.local
+
+# ============================================================================
+# Monitoring Stack
+# ============================================================================
+
+prometheus:
+  enabled: true
+  replicas: 2
+  persistence:
+    size: 50Gi
+  retention: 30d
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: prometheus.ceres.local
+    tls:
+      - secretName: prometheus-tls
+        hosts:
+          - prometheus.ceres.local
+
+grafana:
+  enabled: true
+  replicas: 2
+  adminPassword: changeme
+  datasources:
+    - name: Prometheus
+      url: http://prometheus:9090
+    - name: Loki
+      url: http://loki:3100
+    - name: Tempo
+      url: http://tempo:3200
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: grafana.ceres.local
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.ceres.local
+
+alertmanager:
+  enabled: true
+  replicas: 2
+  persistence:
+    size: 10Gi
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: alertmanager.ceres.local
+    tls:
+      - secretName: alertmanager-tls
+        hosts:
+          - alertmanager.ceres.local
+
+# ============================================================================
+# Logging Stack
+# ============================================================================
+
+loki:
+  enabled: true
+  replicas: 1
+  persistence:
+    size: 30Gi
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: loki.ceres.local
+    tls:
+      - secretName: loki-tls
+        hosts:
+          - loki.ceres.local
+
+promtail:
+  enabled: true
+  config:
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+
+# ============================================================================
+# Tracing Stack
+# ============================================================================
+
+jaeger:
+  enabled: true
+  replicas: 1
+  persistence:
+    size: 20Gi
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: jaeger.ceres.local
+    tls:
+      - secretName: jaeger-tls
+        hosts:
+          - jaeger.ceres.local
+
+tempo:
+  enabled: true
+  replicas: 1
+  persistence:
+    size: 20Gi
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: tempo.ceres.local
+    tls:
+      - secretName: tempo-tls
+        hosts:
+          - tempo.ceres.local
+
+# ============================================================================
+# Additional Services
+# ============================================================================
+
+mayan:
+  enabled: true
+  replicas: 1
+  postgresql:
+    host: postgresql
+    database: mayan
+    username: mayan
+    password: changeme
+  redis:
+    host: redis
+  persistence:
+    size: 100Gi
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: mayan.ceres.local
+    tls:
+      - secretName: mayan-tls
+        hosts:
+          - mayan.ceres.local
+
+onlyoffice:
+  enabled: true
+  replicas: 2
+  image:
+    repository: onlyoffice/documentserver
+    tag: "7.5.0"
+  persistence:
+    size: 50Gi
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: office.ceres.local
+    tls:
+      - secretName: onlyoffice-tls
+        hosts:
+          - office.ceres.local
+
+zulip:
+  enabled: true
+  replicas: 1
+  postgresql:
+    host: postgresql
+    database: zulip
+    username: zulip
+    password: changeme
+  redis:
+    host: redis
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: zulip.ceres.local
+    tls:
+      - secretName: zulip-tls
+        hosts:
+          - zulip.ceres.local
+
+# ============================================================================
+# Network & Ingress
+# ============================================================================
+
+ingress:
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+
+# ============================================================================
+# TLS Certificate Management
+# ============================================================================
+
+certManager:
+  enabled: true
+  clusterIssuer: letsencrypt-prod
+  email: admin@ceres.local
+
+# ============================================================================
+# Resource Quotas
+# ============================================================================
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"

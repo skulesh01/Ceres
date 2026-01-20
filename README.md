@@ -1,28 +1,62 @@
-# CERES — Unified Infrastructure Platform
+# CERES v3.0.0 — Enterprise Kubernetes Platform
 
-![CERES](https://img.shields.io/badge/CERES-v1.0.0-blue?style=flat-square)
-![Status](https://img.shields.io/badge/Status-Beta-yellow?style=flat-square)
+![CERES](https://img.shields.io/badge/CERES-v3.0.0-blue?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Production-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Cross-Platform](https://img.shields.io/badge/Cross--Platform-Windows%20%7C%20Linux%20%7C%20macOS-brightgreen?style=flat-square)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28%2B-blue?style=flat-square)
+![Multi-Cloud](https://img.shields.io/badge/Multi--Cloud-AWS%20%7C%20Azure%20%7C%20GCP-brightgreen?style=flat-square)
 
-**CERES** — единая платформа для развёртывания и управления **20+ open-source сервисами** (GitLab CE, Zulip, Nextcloud, Mayan EDMS, OnlyOffice/Collabora, Keycloak, PostgreSQL, Redis, Prometheus/Grafana, Caddy, WireGuard и др.) на одной машине (Docker Compose) или через Kubernetes/Proxmox с полным GitOps-контролем. Модульная архитектура позволяет выбрать профиль (small/medium/large) под ресурсы.
+**CERES v3.0.0** — полностью управляемая платформа для развёртывания **20+ сервисов** в Kubernetes с **Terraform** инфраструктурой как код и **Flux CD** GitOps управлением. Развертывается на **AWS EKS**, **Azure AKS**, **GCP GKE** или локальном **k3s**. Одна команда `terraform apply` = кластер + все сервисы в production.
 
-### Единая точка входа
+### Deployment Architecture
 
-- Команда: `ceres`
-- Windows: двойной клик или `./ceres.cmd <command>`
-- Linux/macOS: `chmod +x ./ceres` один раз, затем `./ceres <command>`
-- Альтернатива: `pwsh -File scripts/ceres.ps1 <command>` (если нужен прямой вызов)
+```
+Terraform (Infrastructure-as-Code)
+    ↓
+AWS EKS / Azure AKS / GCP GKE / k3s
+    ↓
+Helm Charts (20+ services)
+    ↓
+Flux CD (GitOps automation)
+    ↓
+ProducUse Cases
 
-Запомнить просто: одна команда `ceres` для всего, без поиска по скриптам.
+- **Development**: Local k3s cluster with full observability
+- **Staging**: Multi-node Kubernetes on-premises
+- **Production**: Multi-cloud deployment (AWS/Azure/GCP) with auto-scaling
+- **Enterprise**: GitOps-driven infrastructure with audit trails
+- 🟨 **GCP GKE** - Managed Kubernetes on Google Cloud
+- 📦 What's Included (20+ Services)
 
-Работает на **Windows 10/11**, **Linux** (Ubuntu, Debian, RHEL), **macOS** (Intel & Apple Silicon) ✅
+### Core Infrastructure (3)
+- **PostgreSQL 16** - Primary database for all services
+- **Redis 7** - Distributed cache and session store
+- **Keycloak 23** - OpenID Connect provider for SSO
 
-## 🎯 Что это?
+### Applications (6)
+- **GitLab CE 16.6** - Git repository, CI/CD, container registry
+- **Nextcloud 27** - File synchronization and sharing
+- **Mattermost 9.0** - Team communication platform
+- **Redmine 5** - Project management
+- **Wiki.js 2.5** - Knowledge base
+- **Zulip** - Team messaging system
 
-- **Для разработчиков**: Docker Compose для локального тестирования
-- **Для DevOps**: Kubernetes кластер на Proxmox через Terraform + Ansible
-- **Для всех**: Единая точка входа через `ceres.ps1` CLI приложение
+### Productivity (2)
+- **Mayan EDMS 4.6** - Document management with OCR
+- **OnlyOffice 7.5** - Office document server
+
+### Observability Stack (7)
+- **Prometheus 2.48** - Metrics collection
+- **Grafana 10.2** - Visualization dashboards
+- **Alertmanager 0.26** - Alert management
+- **Loki 2.9** - Log aggregation
+- **Promtail 2.9** - Log shipper
+- **Jaeger 1.50** - Distributed tracing
+- **Tempo 2.3** - Traces backend
+
+### Infrastructure (2)
+- **Cert-Manager** - Automated TLS certificates
+- **Ingress-Nginx** - Kubernetes ingress controller
 - **Кроссплатформенно**: Работает везде - Windows, Linux, macOS
 
 ## ⭐ Что внутри (кратко)
@@ -33,33 +67,45 @@
 - **Edge/VPN/SMTP**: Caddy (reverse-proxy), WireGuard (wg-easy), Mailu (опционально)
 - **GitOps**: FluxCD (k3s/Proxmox), Terraform + Ansible для инфраструктуры
 
-## 🚀 Быстрый старт (5 минут)
+## 🚀 Quick Start
 
-### Windows
-```powershell
-cd Ceres
-powershell -File scripts/ceres.ps1 analyze resources
-```
-
-### Linux / macOS
+### Prerequisites
 ```bash
-cd Ceres
-chmod +x ceres
-./ceres analyze resources
-
-# Или напрямую через PowerShell Core
-pwsh -File scripts/ceres.ps1 analyze resources
+# Install required tools
+- Terraform >= 1.5
+- kubectl >= 1.28
+- Helm >= 3.10
+- AWS CLI / Azure CLI / Google Cloud SDK (for your cloud)
 ```
 
-Подробнее: [docs/00-QUICKSTART.md](docs/00-QUICKSTART.md) | [Linux Setup](docs/02-LINUX_SETUP.md)
+### Option 1: AWS Deployment (5 minutes)
+```bash
+cd config/terraform
+terraform init
+terraform apply -var-file=aws.tfvars
+# Outputs: EKS cluster endpoint, kubeconfig
+```
 
-### Минимальный запуск (локально)
+### Option 2: Local k3s Deployment
+```bash
+# For development/testing
+terraform apply -var="proxmox_enabled=false"
+k3s server --docker
+helm install ceres ./helm/ceres -n ceres
+```
 
-```powershell
-ceres configure --preset small
-ceres start core apps
-ceres status --detailed
-# открыть http://localhost
+### Option 3: Deploy Services
+```bash
+# Install Helm repositories
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+# Deploy CERES
+helm install ceres ./helm/ceres -n ceres
+
+# Or use Flux CD for GitOps
+flux install
+flux reconcile source git
 ```
 
 ## 📂 Структура проекта

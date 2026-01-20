@@ -1,0 +1,116 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  namespace: ceres
+  labels:
+    app: postgresql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgresql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgresql
+  namespace: ceres
+spec:
+  serviceName: postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: "postgres:{{ .Values.postgresql.auth.database | default "16" }}-alpine"
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: "{{ .Values.postgresql.auth.username }}"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          value: "{{ .Values.postgresql.auth.database }}"
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgresql-data
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U {{ .Values.postgresql.auth.username }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U {{ .Values.postgresql.auth.username }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: init-scripts
+        configMap:
+          name: postgres-init-scripts
+  volumeClaimTemplates:
+  - metadata:
+      name: postgresql-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: ceres-database
+      resources:
+        requests:
+          storage: {{ .Values.postgresql.primary.persistence.size }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: ceres
+data:
+  init-databases.sql: |
+    CREATE DATABASE keycloak;
+    CREATE DATABASE gitlab;
+    CREATE DATABASE nextcloud;
+    CREATE DATABASE mattermost;
+    CREATE DATABASE redmine;
+    CREATE DATABASE wiki;
+    CREATE DATABASE mayan;
+    CREATE DATABASE zulip;
+    CREATE USER keycloak WITH PASSWORD '{{ .Values.keycloak.postgresql.password }}';
+    CREATE USER gitlab WITH PASSWORD '{{ .Values.gitlab.postgresql.password }}';
+    CREATE USER nextcloud WITH PASSWORD '{{ .Values.nextcloud.postgresql.password }}';
+    CREATE USER mattermost WITH PASSWORD '{{ .Values.mattermost.postgresql.password }}';
+    CREATE USER redmine WITH PASSWORD '{{ .Values.redmine.postgresql.password }}';
+    CREATE USER wiki WITH PASSWORD '{{ .Values.wiki.postgresql.password }}';
+    CREATE USER mayan WITH PASSWORD '{{ .Values.mayan.postgresql.password }}';
+    CREATE USER zulip WITH PASSWORD '{{ .Values.zulip.postgresql.password }}';
+    GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
+    GRANT ALL PRIVILEGES ON DATABASE gitlab TO gitlab;
+    GRANT ALL PRIVILEGES ON DATABASE nextcloud TO nextcloud;
+    GRANT ALL PRIVILEGES ON DATABASE mattermost TO mattermost;
+    GRANT ALL PRIVILEGES ON DATABASE redmine TO redmine;
+    GRANT ALL PRIVILEGES ON DATABASE wiki TO wiki;
+    GRANT ALL PRIVILEGES ON DATABASE mayan TO mayan;
+    GRANT ALL PRIVILEGES ON DATABASE zulip TO zulip;
+{{- end }}
