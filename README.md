@@ -12,15 +12,50 @@
 
 ## 🚀 Quick Start
 
+### One-Command Deploy (No Go Installation Needed!)
+
+```bash
+# Linux/macOS
+git clone https://github.com/skulesh01/ceres.git
+cd ceres
+./quick-deploy.sh        # Auto-detects Docker or installs Go
+
+# Windows
+git clone https://github.com/skulesh01/ceres.git
+cd ceres
+.\quick-deploy.ps1       # Auto-detects Docker or installs Go
+```
+
+### Alternative: Docker Build
+
+```bash
+# Linux/macOS
+./scripts/docker-build.sh
+
+# Windows
+.\scripts\docker-build.ps1
+```
+
+### Alternative: Auto-Install Go
+
+```bash
+# Linux/macOS
+./scripts/setup-go.sh
+
+# Windows
+.\scripts\setup-go.ps1
+```
+
 ### Prerequisites
-- Go 1.21+
-- Make (optional)
+- **Option 1 (Recommended)**: Docker 20.10+
+- **Option 2**: Auto-install scripts (curl/PowerShell)
+- **Option 3**: Go 1.21+ (manual)
 
 ### Build & Deploy
 
 ```bash
-# 1. Build CLI
-make build
+# 1. Quick deploy (builds automatically)
+./quick-deploy.sh
 
 # 2. Deploy infrastructure
 ./bin/ceres deploy --cloud aws --environment prod
@@ -31,6 +66,8 @@ make build
 # 4. Validate
 ./bin/ceres validate
 ```
+
+📚 **Full documentation**: [docs/AUTO_INSTALL.md](docs/AUTO_INSTALL.md)
 
 ## 📋 What's Included
 
