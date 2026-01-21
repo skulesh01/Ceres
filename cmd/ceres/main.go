@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/skulesh01/ceres/pkg/deployment"
+	"github.com/skulesh01/ceres/pkg/vpn"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +32,7 @@ Supported clouds: AWS (EKS), Azure (AKS), GCP (GKE)`,
 	rootCmd.AddCommand(newStatusCmd())
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newValidateCmd())
+	rootCmd.AddCommand(newVPNCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -43,6 +46,7 @@ func newDeployCmd() *cobra.Command {
 		environment string
 		cloud       string
 		dryRun      bool
+		namespace   string
 	)
 
 	cmd := &cobra.Command{
@@ -51,22 +55,29 @@ func newDeployCmd() *cobra.Command {
 		Long: `Deploy CERES platform to Kubernetes cluster.
 
 Examples:
-  ceres deploy --cloud aws --environment prod
-  ceres deploy --cloud azure --dry-run
+  ceres deploy --cloud proxmox --environment prod
+  ceres deploy --cloud k3s --dry-run
   ceres deploy --help`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("🚀 Deploying CERES to %s (%s)...\n", cloud, environment)
 			if dryRun {
 				fmt.Println("📋 DRY-RUN: No changes will be made")
+				return nil
 			}
-			// TODO: Implement deployment logic
-			fmt.Println("✅ Deployment configuration prepared")
-			return nil
+
+			// Create deployer
+			deployer, err := deployment.NewDeployer(cloud, environment, namespace)
+			if err != nil {
+				return fmt.Errorf("failed to create deployer: %w", err)
+			}
+
+			// Execute deployment
+			return deployer.Deploy()
 		},
 	}
 
 	cmd.Flags().StringVar(&environment, "environment", "prod", "Environment (dev, staging, prod)")
-	cmd.Flags().StringVar(&cloud, "cloud", "aws", "Cloud provider (aws, azure, gcp)")
+	cmd.Flags().StringVar(&cloud, "cloud", "proxmox", "Cloud provider (proxmox, k3s, aws, azure, gcp)")
+	cmd.Flags().StringVar(&namespace, "namespace", "ceres", "Kubernetes namespace")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be done without making changes")
 
 	return cmd
@@ -88,8 +99,19 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("📊 CERES Status (namespace: %s)\n", namespace)
 			fmt.Println("=====================================")
-			// TODO: Implement status check
-			fmt.Println("✅ All services running")
+
+			// Create deployer to get status
+			deployer, err := deployment.NewDeployer("proxmox", "prod", namespace)
+			if err != nil {
+				return fmt.Errorf("failed to create deployer: %w", err)
+			}
+
+			status, err := deployer.Status()
+			if err != nil {
+				return fmt.Errorf("failed to get status: %w", err)
+			}
+
+			fmt.Println(status)
 			return nil
 		},
 	}
@@ -161,6 +183,72 @@ Checks:
 	}
 
 	cmd.Flags().BoolVar(&checkOnly, "check-only", false, "Only check, don't fix issues")
+
+	return cmd
+}
+
+// newVPNCmd creates the VPN command
+func newVPNCmd() *cobra.Command {
+	var serverIP string
+
+	cmd := &cobra.Command{
+		Use:   "vpn",
+		Short: "Manage VPN connection",
+		Long: `Manage WireGuard VPN connection to CERES cluster.
+
+Examples:
+  ceres vpn setup --server 192.168.1.3
+  ceres vpn status
+  ceres vpn disconnect`,
+	}
+
+	// Setup subcommand
+	setupCmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Setup VPN connection",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if serverIP == "" {
+				serverIP = "192.168.1.3" // Default Proxmox IP
+			}
+			
+			vpnMgr := vpn.NewVPNManager(serverIP)
+			return vpnMgr.Setup()
+		},
+	}
+	setupCmd.Flags().StringVar(&serverIP, "server", "192.168.1.3", "Proxmox server IP")
+
+	// Status subcommand
+	statusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show VPN status",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			vpnMgr := vpn.NewVPNManager("")
+			status, err := vpnMgr.Status()
+			if err != nil {
+				return fmt.Errorf("VPN not connected")
+			}
+			fmt.Println(status)
+			return nil
+		},
+	}
+
+	// Disconnect subcommand
+	disconnectCmd := &cobra.Command{
+		Use:   "disconnect",
+		Short: "Disconnect VPN",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			vpnMgr := vpn.NewVPNManager("")
+			if err := vpnMgr.Disconnect(); err != nil {
+				return err
+			}
+			fmt.Println("✅ VPN disconnected")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(setupCmd)
+	cmd.AddCommand(statusCmd)
+	cmd.AddCommand(disconnectCmd)
 
 	return cmd
 }

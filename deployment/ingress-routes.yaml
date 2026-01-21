@@ -1,0 +1,216 @@
+# Ingress routes for all CERES services
+# Access via http://192.168.1.3:30080/<service-path>
+
+---
+# Keycloak Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-ingress
+  namespace: ceres
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 8080
+---
+# Grafana Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+---
+# Prometheus Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus-ingress
+  namespace: monitoring
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+---
+# Jaeger Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-ingress
+  namespace: monitoring
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /jaeger
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger
+            port:
+              number: 16686
+---
+# GitLab Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitlab-ingress
+  namespace: gitlab
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /gitlab
+        pathType: Prefix
+        backend:
+          service:
+            name: gitlab
+            port:
+              number: 80
+---
+# Nextcloud Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nextcloud-ingress
+  namespace: nextcloud
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /nextcloud
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud
+            port:
+              number: 80
+---
+# Mattermost Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mattermost-ingress
+  namespace: mattermost
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /mattermost
+        pathType: Prefix
+        backend:
+          service:
+            name: mattermost
+            port:
+              number: 8065
+---
+# Wiki.js Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wikijs-ingress
+  namespace: wiki
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /wiki
+        pathType: Prefix
+        backend:
+          service:
+            name: wikijs
+            port:
+              number: 3000
+---
+# Redmine Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redmine-ingress
+  namespace: redmine
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /redmine
+        pathType: Prefix
+        backend:
+          service:
+            name: redmine
+            port:
+              number: 3000
+---
+# MinIO Console Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-ingress
+  namespace: minio
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /minio
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              number: 9001
+---
+# Vault Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vault-ingress
+  namespace: vault
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /vault
+        pathType: Prefix
+        backend:
+          service:
+            name: vault
+            port:
+              number: 8200

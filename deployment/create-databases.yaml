@@ -1,0 +1,51 @@
+# Job для создания всех необходимых БД (идемпотентный)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-databases
+  namespace: ceres-core
+spec:
+  ttlSecondsAfterFinished: 60  # Auto-cleanup after 1 minute
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: createdb
+        image: postgres:16
+        env:
+        - name: PGPASSWORD
+          value: ceres_postgres_2025
+        - name: PGHOST
+          value: postgresql.ceres-core.svc.cluster.local
+        - name: PGUSER
+          value: postgres
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "🗄️  Создание баз данных для сервисов..."
+          
+          # Функция создания БД (идемпотентная)
+          create_db() {
+            local dbname=$1
+            psql -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$dbname'" | grep -q 1 && {
+              echo "  ✓ $dbname уже существует"
+            } || {
+              psql -d postgres -c "CREATE DATABASE $dbname;" && echo "  ✅ $dbname создана"
+            }
+          }
+          
+          # Создаём все БД
+          create_db redmine
+          create_db wikijs
+          create_db mattermost
+          create_db nextcloud
+          create_db gitlab
+          
+          echo ""
+          echo "📊 Список всех баз данных:"
+          psql -d postgres -c "\l" | grep -E "redmine|wikijs|mattermost|nextcloud|gitlab"
+          
+          echo ""
+          echo "✅ Готово!"

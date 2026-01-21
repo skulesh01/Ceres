@@ -8,6 +8,18 @@ echo "🚀 CERES Platform v3.0.0 - Quick Deploy"
 echo "========================================"
 echo ""
 
+# Step 1: Wake up Proxmox server if configured
+if [ -f "config/network.yaml" ]; then
+    echo "🌐 Checking network configuration..."
+    
+    # Check if WOL is enabled
+    if grep -q "enabled: true" config/network.yaml; then
+        echo "📡 Wake-on-LAN enabled - waking up Proxmox server..."
+        ./scripts/wol.sh config/network.yaml proxmox || echo "⚠️  WOL failed, continuing anyway..."
+    fi
+fi
+echo ""
+
 # Detect if Docker is available
 if command -v docker &> /dev/null; then
     echo "✅ Docker found - using Docker build"

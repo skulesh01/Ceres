@@ -1,14 +1,14 @@
 # .gitignore для проекта Ceres
 
-# 🔐 КРИТИЧНО: Приватный проект с паролями
+# 🔐 КРИТИЧНО: Приватные папки с паролями и credentials
 ../Ceres-Private/
+../Ceres-Management/
+../AI-hand/
 *-Private/
+*-Management/
 credentials.json
-# Note: deploy-to-proxmox.py is now in scripts/ as improved public version
-setup-ssh.py
-setup-ssh.ps1
-remote-deploy.py
-remote-deploy.ps1
+network.yaml
+terraform.tfvars
 
 # 🔐 Секретные файлы
 config/.env

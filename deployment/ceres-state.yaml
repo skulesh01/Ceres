@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ceres-deployment-state
+  namespace: kube-system
+data:
+  version: "3.0.0"
+  installed: "true"
+  installDate: ""
+  services: |
+    postgresql: deployed
+    redis: deployed
+    keycloak: deployed
+    ingress-nginx: deployed
+    grafana: deployed
+    prometheus: deployed
+    loki: deployed
+    alertmanager: deployed
+    jaeger: deployed
+    gitlab: deployed
+    nextcloud: deployed
+    mattermost: deployed
+    wikijs: deployed
+    redmine: deployed
+    minio: deployed
+    vault: deployed
+  endpoints: |
+    postgresql: 10.43.1.196:5432
+    redis: 10.43.89.168:6379
+    keycloak: <auto>:8080
+    grafana: <auto>:3000
+    prometheus: <auto>:9090
+    loki: <auto>:3100
+    jaeger: <auto>:16686
+    gitlab: <auto>:80
+    nextcloud: <auto>:80
+    mattermost: <auto>:8065
+    wikijs: <auto>:3000
+    redmine: <auto>:3000
+    minio: <auto>:9001
+    vault: <auto>:8200
+  credentials: |
+    postgres_password: ceres_postgres_2025
+    redis_password: ceres_redis_2025
+    keycloak_admin: admin:K3yClo@k!2025
+    grafana_admin: admin:Grafana@Admin2025
+    gitlab_root: root:GitLab@Root2025
+    nextcloud_admin: admin:Nextcloud@Admin2025
+    minio_root: minioadmin:MinIO@Admin2025
+    vault_token: root-token-2025

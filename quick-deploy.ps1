@@ -7,6 +7,22 @@ Write-Host "🚀 CERES Platform v3.0.0 - Quick Deploy" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Step 1: Wake up Proxmox server if configured
+if (Test-Path "config\network.yaml") {
+    Write-Host "🌐 Checking network configuration..." -ForegroundColor Cyan
+    
+    $NetworkConfig = Get-Content "config\network.yaml" -Raw
+    if ($NetworkConfig -match "enabled:\s*true") {
+        Write-Host "📡 Wake-on-LAN enabled - waking up Proxmox server..." -ForegroundColor Yellow
+        try {
+            & ".\scripts\wol.ps1" -ConfigFile "config\network.yaml" -Target "proxmox"
+        } catch {
+            Write-Host "⚠️  WOL failed, continuing anyway..." -ForegroundColor Yellow
+        }
+    }
+}
+Write-Host ""
+
 # Detect if Docker is available
 $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
 
