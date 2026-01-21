@@ -1,0 +1,47 @@
+#!/bin/bash
+# Pre-commit hook для проверки версии
+
+VERSION_FILE="VERSION"
+MAIN_GO="cmd/ceres/main.go"
+
+# Проверяем существование файлов
+if [ ! -f "$VERSION_FILE" ]; then
+    echo "❌ Файл VERSION не найден!"
+    exit 1
+fi
+
+if [ ! -f "$MAIN_GO" ]; then
+    echo "❌ Файл cmd/ceres/main.go не найден!"
+    exit 1
+fi
+
+# Читаем версии
+VERSION_FROM_FILE=$(cat "$VERSION_FILE" | tr -d '\n\r')
+VERSION_FROM_GO=$(grep 'Version = ' "$MAIN_GO" | sed 's/.*Version = "\(.*\)"/\1/')
+
+# Сравниваем
+if [ "$VERSION_FROM_FILE" != "$VERSION_FROM_GO" ]; then
+    echo "❌ ОШИБКА: Версии не совпадают!"
+    echo "   VERSION файл:     $VERSION_FROM_FILE"
+    echo "   main.go:          $VERSION_FROM_GO"
+    echo ""
+    echo "Обновите версию в обоих файлах перед коммитом!"
+    exit 1
+fi
+
+# Проверяем формат версии (semantic versioning)
+if ! echo "$VERSION_FROM_FILE" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "❌ ОШИБКА: Неверный формат версии: $VERSION_FROM_FILE"
+    echo "   Используйте MAJOR.MINOR.PATCH (например: 3.0.1)"
+    exit 1
+fi
+
+# Проверяем сообщение коммита
+COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null || echo "")
+if ! echo "$COMMIT_MSG" | grep -qE "^v[0-9]+\.[0-9]+\.[0-9]+:"; then
+    echo "⚠️  ПРЕДУПРЕЖДЕНИЕ: Сообщение коммита не содержит версию"
+    echo "   Рекомендуемый формат: v$VERSION_FROM_FILE: Описание изменений"
+fi
+
+echo "✅ Версия проверена: $VERSION_FROM_FILE"
+exit 0
