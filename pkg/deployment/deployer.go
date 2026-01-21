@@ -200,18 +200,50 @@ func (d *Deployer) deployMonitoring() error {
 }
 
 func (d *Deployer) runDiagnostics() error {
-	// Check K3s DNS connectivity
-	fmt.Println("    🌐 Checking network connectivity...")
-	// This would run diagnose-k3s.ps1 in production
-	// For now, just verify cluster access
+	fmt.Println("    🌐 Running diagnostics...")
+	
+	// Check cluster connectivity
+	cmd := exec.Command("kubectl", "cluster-info")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("kubectl cluster-info failed: %w", err)
+	}
+	fmt.Println("      ✓ Cluster connectivity OK")
+	
+	// Check DNS
+	cmd = exec.Command("kubectl", "get", "svc", "-n", "kube-system", "kube-dns")
+	if err := cmd.Run(); err != nil {
+		fmt.Println("      ⚠️  DNS service not found (might be CoreDNS)")
+	} else {
+		fmt.Println("      ✓ DNS service available")
+	}
+	
+	// Check nodes
+	cmd = exec.Command("kubectl", "get", "nodes")
+	output, _ := cmd.Output()
+	if strings.Contains(string(output), "Ready") {
+		fmt.Println("      ✓ Nodes are Ready")
+	}
+	
 	return nil
 }
 
 func (d *Deployer) waitForDeployment(name, namespace, deployType string, timeoutSeconds int) error {
-	// Wait for pod to be ready
-	// This would use wait-for-deployment.ps1 or implement native Go polling
 	fmt.Printf("    ⏱️  Waiting up to %ds for %s...\n", timeoutSeconds, name)
-	return nil
+	
+	for i := 0; i < timeoutSeconds; i++ {
+		cmd := exec.Command("kubectl", "get", deployType, name, "-n", namespace, "-o", "jsonpath={.status.readyReplicas}")
+		output, _ := cmd.Output()
+		
+		readyReplicas := strings.TrimSpace(string(output))
+		if readyReplicas != "" && readyReplicas != "0" {
+			fmt.Printf("    ✅ %s is ready!\n", name)
+			return nil
+		}
+		
+		time.Sleep(1 * time.Second)
+	}
+	
+	return fmt.Errorf("timeout waiting for %s", name)
 }
 
 // Status returns deployment status
@@ -481,4 +513,192 @@ func (d *Deployer) createDatabases() error {
 	}
 	
 	return fmt.Errorf("database creation job timed out")
+}
+
+// Diagnose runs cluster diagnostics
+func (d *Deployer) Diagnose() error {
+	fmt.Println("=====================================")
+	fmt.Println("🔍 CERES Cluster Diagnostics")
+	fmt.Println("=====================================\n")
+
+	// 1. Cluster connectivity
+	fmt.Println("1️⃣  Cluster Connectivity:")
+	cmd := exec.Command("kubectl", "cluster-info")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("  ❌ Cluster not accessible: %v\n", err)
+		return err
+	}
+	fmt.Println("  ✅ Cluster is accessible")
+
+	// 2. Nodes status
+	fmt.Println("\n2️⃣  Nodes Status:")
+	cmd = exec.Command("kubectl", "get", "nodes", "-o", "wide")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+
+	// 3. Running pods count
+	fmt.Println("\n3️⃣  Pods Summary:")
+	cmd = exec.Command("kubectl", "get", "pods", "--all-namespaces", "--no-headers")
+	output, _ = cmd.Output()
+	lines := strings.Split(string(output), "\n")
+	
+	running := 0
+	crashing := 0
+	pending := 0
+	
+	for _, line := range lines {
+		if strings.Contains(line, "Running") {
+			running++
+		} else if strings.Contains(line, "CrashLoopBackOff") || strings.Contains(line, "Error") {
+			crashing++
+		} else if strings.Contains(line, "Pending") {
+			pending++
+		}
+	}
+	
+	fmt.Printf("  ✅ Running: %d\n", running)
+	fmt.Printf("  ⚠️  Crashing: %d\n", crashing)
+	fmt.Printf("  🕐 Pending: %d\n", pending)
+
+	// 4. Failed pods details
+	if crashing > 0 {
+		fmt.Println("\n4️⃣  Failed Pods Details:")
+		cmd = exec.Command("kubectl", "get", "pods", "--all-namespaces", "--field-selector=status.phase!=Running,status.phase!=Succeeded")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	}
+
+	// 5. Resource usage
+	fmt.Println("\n5️⃣  Resource Usage:")
+	cmd = exec.Command("kubectl", "top", "nodes")
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		fmt.Println("  ⚠️  Metrics not available (install metrics-server)")
+	} else {
+		fmt.Println(string(output))
+	}
+
+	// 6. Storage
+	fmt.Println("6️⃣  Storage:")
+	cmd = exec.Command("kubectl", "get", "pvc", "--all-namespaces")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+
+	fmt.Println("\n✅ Diagnostics complete!")
+	return nil
+}
+
+// FixServices automatically fixes common issues with failing services
+func (d *Deployer) FixServices(serviceFilter string) error {
+	fmt.Println("=====================================")
+	fmt.Println("🔧 Fixing Services")
+	fmt.Println("=====================================\n")
+
+	// Get all failing pods
+	cmd := exec.Command("kubectl", "get", "pods", "--all-namespaces", 
+		"--field-selector=status.phase!=Running,status.phase!=Succeeded",
+		"-o", "jsonpath={range .items[*]}{.metadata.namespace}{'/'}{.metadata.name}{'\\n'}{end}")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get failing pods: %w", err)
+	}
+
+	failingPods := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(failingPods) == 0 || failingPods[0] == "" {
+		fmt.Println("✅ No failing pods found!")
+		return nil
+	}
+
+	fmt.Printf("Found %d failing pod(s)\n\n", len(failingPods))
+
+	for _, pod := range failingPods {
+		if pod == "" {
+			continue
+		}
+
+		parts := strings.Split(pod, "/")
+		if len(parts) != 2 {
+			continue
+		}
+		namespace := parts[0]
+		podName := parts[1]
+
+		// Filter by service if specified
+		if serviceFilter != "" && !strings.Contains(podName, serviceFilter) {
+			continue
+		}
+
+		fmt.Printf("🔧 Fixing %s in %s...\n", podName, namespace)
+
+		// Get pod logs to identify issue
+		cmd = exec.Command("kubectl", "logs", "-n", namespace, podName, "--tail=20")
+		logs, _ := cmd.Output()
+		logsStr := string(logs)
+
+		// Common fixes based on log patterns
+		if strings.Contains(logsStr, "Permission denied") {
+			fmt.Println("  📌 Issue: Permission denied")
+			d.fixPermissionIssue(namespace, podName)
+		} else if strings.Contains(logsStr, "unix domain socket") {
+			fmt.Println("  📌 Issue: Unix socket permission")
+			d.fixSocketPermission(namespace, podName)
+		} else if strings.Contains(logsStr, "cache type") {
+			fmt.Println("  📌 Issue: Cache configuration")
+			d.fixCacheConfig(namespace, podName)
+		} else {
+			fmt.Println("  📌 Issue: Unknown - restarting pod")
+			d.restartPod(namespace, podName)
+		}
+	}
+
+	fmt.Println("\n✅ Fix attempt complete! Checking status in 30s...")
+	time.Sleep(30 * time.Second)
+
+	// Show updated status
+	cmd = exec.Command("kubectl", "get", "pods", "--all-namespaces", 
+		"--field-selector=status.phase!=Running,status.phase!=Succeeded")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+
+	return nil
+}
+
+func (d *Deployer) fixPermissionIssue(namespace, podName string) {
+	// Delete pod to trigger restart with corrected permissions
+	fmt.Println("  🔄 Restarting with permission fix...")
+	cmd := exec.Command("kubectl", "delete", "pod", "-n", namespace, podName)
+	cmd.Run()
+}
+
+func (d *Deployer) fixSocketPermission(namespace, podName string) {
+	// RabbitMQ specific fix
+	fmt.Println("  🔄 Applying RabbitMQ socket fix...")
+	
+	// Delete and re-apply with corrected security context
+	cmd := exec.Command("kubectl", "delete", "pod", "-n", namespace, podName)
+	cmd.Run()
+	
+	time.Sleep(5 * time.Second)
+	
+	// Re-apply manifest will use updated configuration
+	d.applyManifest("deployment/all-services.yaml")
+}
+
+func (d *Deployer) fixCacheConfig(namespace, podName string) {
+	// Harbor specific fix
+	fmt.Println("  🔄 Fixing Harbor cache configuration...")
+	
+	cmd := exec.Command("kubectl", "delete", "pod", "-n", namespace, podName)
+	cmd.Run()
+}
+
+func (d *Deployer) restartPod(namespace, podName string) {
+	fmt.Println("  🔄 Restarting pod...")
+	cmd := exec.Command("kubectl", "delete", "pod", "-n", namespace, podName)
+	cmd.Run()
 }

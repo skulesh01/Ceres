@@ -42,10 +42,11 @@ spec:
           create_db mattermost
           create_db nextcloud
           create_db gitlab
+          create_db sonarqube
           
           echo ""
           echo "📊 Список всех баз данных:"
-          psql -d postgres -c "\l" | grep -E "redmine|wikijs|mattermost|nextcloud|gitlab"
+          psql -d postgres -c "\l" | grep -E "redmine|wikijs|mattermost|nextcloud|gitlab|sonarqube"
           
           echo ""
           echo "✅ Готово!"

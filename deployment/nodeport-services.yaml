@@ -147,7 +147,7 @@ spec:
   ports:
   - port: 9000
     targetPort: 9000
-    nodePort: 30900
+    nodePort: 30904
   selector:
     app: sonarqube
 ---
@@ -195,6 +195,68 @@ spec:
     nodePort: 30880
   selector:
     app: adminer
+---
+# RabbitMQ Management NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-nodeport
+  namespace: rabbitmq
+spec:
+  type: NodePort
+  ports:
+  - name: management
+    port: 15672
+    targetPort: 15672
+    nodePort: 30672
+  selector:
+    app: rabbitmq
+---
+# Elasticsearch NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-nodeport
+  namespace: elasticsearch
+spec:
+  type: NodePort
+  ports:
+  - port: 9200
+    targetPort: 9200
+    nodePort: 30920
+  selector:
+    app: elasticsearch
+---
+# Kibana NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana-nodeport
+  namespace: kibana
+spec:
+  type: NodePort
+  ports:
+  - port: 5601
+    targetPort: 5601
+    nodePort: 30561
+  selector:
+    app: kibana
+---
+# Harbor NodePort
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor-nodeport
+  namespace: harbor
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30800
+  selector:
+    app: harbor-core
+
 ---
 # Nextcloud NodePort
 apiVersion: v1
