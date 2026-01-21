@@ -1,0 +1,42 @@
+# Velero для backup и restore
+# CERES v3.1 - Задача 3.1
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: velero
+---
+# Установка через Helm (выполняется через deployer.go)
+# helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
+# helm install velero vmware-tanzu/velero --namespace velero --set configuration.provider=aws --set configuration.backupStorageLocation.bucket=ceres-backups --set configuration.volumeSnapshotLocation.config.region=minio --set snapshotsEnabled=false --set initContainers[0].name=velero-plugin-for-aws --set initContainers[0].image=velero/velero-plugin-for-aws:v1.8.0 --set initContainers[0].volumeMounts[0].mountPath=/target --set initContainers[0].volumeMounts[0].name=plugins
+---
+# BackupStorageLocation (MinIO S3-compatible)
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: default
+  namespace: velero
+spec:
+  provider: aws
+  objectStorage:
+    bucket: ceres-backups
+  config:
+    region: minio
+    s3ForcePathStyle: "true"
+    s3Url: http://minio.minio.svc.cluster.local:9000
+---
+# Schedule: ежедневный backup в 2:00
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-backup
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    includedNamespaces:
+    - "*"
+    excludedNamespaces:
+    - kube-system
+    - kube-public
+    - kube-node-lease
+    ttl: 720h0m0s  # 30 дней

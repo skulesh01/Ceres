@@ -18,13 +18,7 @@ kind: ConfigMap
 metadata:
   name: keycloak-config
   namespace: ceres
-data:
-  KC_DB: postgres
-  KC_DB_URL: jdbc:postgresql://postgresql.ceres-core:5432/keycloak
-  KC_DB_USERNAME: postgres
-  KC_HOSTNAME: keycloak.ceres.local
-  KC_HTTP_ENABLED: "true"
-  KC_PROXY: edge
+data: {}
 ---
 apiVersion: v1
 kind: Service
@@ -43,6 +37,18 @@ spec:
     targetPort: 8443
   type: ClusterIP
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-data
+  namespace: ceres
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -58,72 +64,37 @@ spec:
       labels:
         app: keycloak
     spec:
+      volumes:
+      - name: keycloak-data
+        persistentVolumeClaim:
+          claimName: keycloak-data
       containers:
       - name: keycloak
         image: quay.io/keycloak/keycloak:23.0.0
         args:
-        - start
-        - --optimized
+        - start-dev
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        volumeMounts:
+        - name: keycloak-data
+          mountPath: /opt/keycloak/data
         env:
         - name: KEYCLOAK_ADMIN
           value: admin
         - name: KEYCLOAK_ADMIN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: keycloak-secret
-              key: admin-password
-        - name: KC_DB
-          valueFrom:
-            configMapKeyRef:
-              name: keycloak-config
-              key: KC_DB
-        - name: KC_DB_URL
-          valueFrom:
-            configMapKeyRef:
-              name: keycloak-config
-              key: KC_DB_URL
-        - name: KC_DB_USERNAME
-          valueFrom:
-            configMapKeyRef:
-              name: keycloak-config
-              key: KC_DB_USERNAME
-        - name: KC_DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: keycloak-secret
-              key: db-password
-        - name: KC_HOSTNAME
-          valueFrom:
-            configMapKeyRef:
-              name: keycloak-config
-              key: KC_HOSTNAME
-        - name: KC_HTTP_ENABLED
-          valueFrom:
-            configMapKeyRef:
-              name: keycloak-config
-              key: KC_HTTP_ENABLED
+          value: admin123
         - name: KC_PROXY
-          valueFrom:
-            configMapKeyRef:
-              name: keycloak-config
-              key: KC_PROXY
+          value: edge
+        - name: KC_HOSTNAME_STRICT
+          value: 'false'
+        - name: KC_HTTP_ENABLED
+          value: 'true'
         ports:
         - name: http
           containerPort: 8080
         - name: https
           containerPort: 8443
-        readinessProbe:
-          httpGet:
-            path: /health/ready
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 8080
-          initialDelaySeconds: 90
-          periodSeconds: 30
         resources:
           requests:
             memory: "1Gi"

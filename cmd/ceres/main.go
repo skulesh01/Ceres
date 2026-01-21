@@ -4,27 +4,30 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/skulesh01/ceres/pkg/backup"
 	"github.com/skulesh01/ceres/pkg/deployment"
+	"github.com/skulesh01/ceres/pkg/mail"
+	"github.com/skulesh01/ceres/pkg/sso"
 	"github.com/skulesh01/ceres/pkg/vpn"
 	"github.com/spf13/cobra"
 )
 
 var (
 	// Version will be set during build
-	Version = "3.0.0"
+	Version = "3.1.0"
 )
 
 func main() {
 	rootCmd := &cobra.Command{
 		Use:     "ceres",
 		Version: Version,
-		Short:   "CERES v3.0.0 - Enterprise Kubernetes Platform",
-		Long: `CERES v3.0.0 - Enterprise Kubernetes Platform
+		Short:   "CERES v3.1.0 - Enterprise Kubernetes Platform",
+		Long: `CERES v3.1.0 - Enterprise Kubernetes Platform
 
-A production-ready, multi-cloud Kubernetes platform with Terraform IaC,
-Helm charts for 20+ services, and Flux CD GitOps automation.
+Production-ready Kubernetes platform with automated deployment,
+TLS certificates, backups, logging, SSO integration, and mail server.
 
-Supported clouds: AWS (EKS), Azure (AKS), GCP (GKE)`,
+Features: Cert-Manager, Velero, Promtail, Mailcow, Keycloak SSO`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// If no subcommand provided, run interactive mode
 			return runInteractive()
@@ -39,6 +42,11 @@ Supported clouds: AWS (EKS), Azure (AKS), GCP (GKE)`,
 	rootCmd.AddCommand(newVPNCmd())
 	rootCmd.AddCommand(newFixCmd())
 	rootCmd.AddCommand(newDiagnoseCmd())
+	rootCmd.AddCommand(newUpgradeCmd())        // НОВОЕ
+	rootCmd.AddCommand(newBackupCmd())         // НОВОЕ
+	rootCmd.AddCommand(newMailCmd())           // НОВОЕ
+	rootCmd.AddCommand(newSSOCmd())            // НОВОЕ
+	rootCmd.AddCommand(newHealthCmd())         // НОВОЕ
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -524,5 +532,199 @@ func configInteractive() error {
 		return nil
 	default:
 		return fmt.Errorf("неверный выбор")
+	}
+}
+
+// НОВЫЕ КОМАНДЫ ДЛЯ v3.1.0
+
+// newUpgradeCmd обновление до v3.1
+func newUpgradeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade CERES to v3.1.0 with SSO integration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deployer, _ := deployment.NewDeployer("proxmox", "prod", "ceres")
+			
+			fmt.Println("🚀 Upgrading CERES v3.0 → v3.1...")
+			
+			// 1. Remove duplicates
+			fmt.Println("\n1️⃣  Removing duplicate services...")
+			deployer.RemoveDuplicates()
+			
+			// 2. Fix Keycloak deployment
+			fmt.Println("\n2️⃣  Fixing Keycloak deployment...")
+			if err := deployer.FixKeycloak(); err != nil {
+				fmt.Printf("⚠️  Keycloak fix: %v\n", err)
+			}
+			
+			// 3. Setup TLS
+			fmt.Println("\n3️⃣  Setting up TLS...")
+			deployer.SetupTLS()
+			
+			// 4. Setup Backup
+			fmt.Println("\n4️⃣  Setting up backup system...")
+			deployer.SetupBackup()
+			
+			// 5. Setup Logging
+			fmt.Println("\n5️⃣  Setting up logging...")
+			deployer.SetupLogging()
+			
+			// 6. Setup Mail
+			fmt.Println("\n6️⃣  Setting up mail server...")
+			deployer.SetupMail()
+			
+			// 7. Configure SSO
+			fmt.Println("\n7️⃣  Configuring SSO integration...")
+			ssoMgr := sso.NewManager()
+			if err := ssoMgr.Install(); err != nil {
+				fmt.Printf("⚠️  SSO installation: %v\n", err)
+				fmt.Println("💡 Run 'ceres sso install' manually after Keycloak is ready")
+			}
+			
+			fmt.Println("\n✅ Upgrade completed!")
+			fmt.Println("\n📝 Next steps:")
+			fmt.Println("1. Add domains to /etc/hosts (see output above)")
+			fmt.Println("2. Run: ceres sso integrate-all")
+			fmt.Println("3. Check status: ceres health")
+			
+			return nil
+		},
+	}
+}
+
+// newBackupCmd команды бэкапа
+func newBackupCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "backup",
+		Short: "Управление бэкапами",
+	}
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "create [name]",
+		Short: "Создать backup",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backupMgr := backup.NewManager()
+			name := ""
+			if len(args) > 0 {
+				name = args[0]
+			}
+			return backupMgr.CreateBackup(name)
+		},
+	})
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "Список backups",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backupMgr := backup.NewManager()
+			backups, err := backupMgr.ListBackups()
+			if err != nil {
+				return err
+			}
+			for _, b := range backups {
+				fmt.Println(b)
+			}
+			return nil
+		},
+	})
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "restore <name>",
+		Short: "Восстановить из backup",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			backupMgr := backup.NewManager()
+			return backupMgr.Restore(args[0])
+		},
+	})
+	
+	return cmd
+}
+
+// newMailCmd команды почты
+func newMailCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mail",
+		Short: "Управление почтовым сервером",
+	}
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "Статус Mailcow",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mailMgr := mail.NewManager()
+			return mailMgr.Status()
+		},
+	})
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "test <email>",
+		Short: "Отправить тестовое письмо",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mailMgr := mail.NewManager()
+			return mailMgr.SendTestEmail(args[0])
+		},
+	})
+	
+	return cmd
+}
+
+// newSSOCmd команды SSO
+func newSSOCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sso",
+		Short: "Управление SSO интеграцией",
+	}
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "install",
+		Short: "Установить SSO компоненты (Realm, OAuth2 Proxy, Ingress)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ssoMgr := sso.NewManager()
+			return ssoMgr.Install()
+		},
+	})
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "integrate <service>",
+		Short: "Интегрировать сервис с Keycloak",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ssoMgr := sso.NewManager()
+			return ssoMgr.IntegrateService(args[0])
+		},
+	})
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "integrate-all",
+		Short: "Интегрировать все сервисы",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ssoMgr := sso.NewManager()
+			return ssoMgr.IntegrateAll()
+		},
+	})
+	
+	cmd.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "Статус SSO",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ssoMgr := sso.NewManager()
+			return ssoMgr.Status()
+		},
+	})
+	
+	return cmd
+}
+
+// newHealthCmd проверка здоровья
+func newHealthCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "health",
+		Short: "Проверка здоровья платформы",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			deployer, _ := deployment.NewDeployer("proxmox", "prod", "ceres")
+			return deployer.HealthCheck()
+		},
 	}
 }

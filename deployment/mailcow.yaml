@@ -1,0 +1,201 @@
+# Mailcow - Полноценный почтовый сервер
+# CERES v3.1 - Задача 6.1
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mailcow
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mailcow-data
+  namespace: mailcow
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mailcow-config
+  namespace: mailcow
+data:
+  MAILCOW_HOSTNAME: "mail.ceres.local"
+  MAILCOW_DOMAIN: "ceres.local"
+  SKIP_LETS_ENCRYPT: "y"  # Используем Cert-Manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailcow
+  namespace: mailcow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailcow
+  template:
+    metadata:
+      labels:
+        app: mailcow
+    spec:
+      containers:
+      # Postfix (SMTP Server)
+      - name: postfix
+        image: mailcow/postfix:1.70
+        ports:
+        - containerPort: 25
+          name: smtp
+        - containerPort: 587
+          name: submission
+        - containerPort: 465
+          name: smtps
+        env:
+        - name: MAILCOW_HOSTNAME
+          valueFrom:
+            configMapKeyRef:
+              name: mailcow-config
+              key: MAILCOW_HOSTNAME
+        volumeMounts:
+        - name: mailcow-data
+          mountPath: /var/vmail
+          subPath: vmail
+        - name: mailcow-data
+          mountPath: /var/spool/postfix
+          subPath: postfix
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      # Dovecot (IMAP Server)
+      - name: dovecot
+        image: mailcow/dovecot:1.70
+        ports:
+        - containerPort: 143
+          name: imap
+        - containerPort: 993
+          name: imaps
+        - containerPort: 110
+          name: pop3
+        - containerPort: 995
+          name: pop3s
+        volumeMounts:
+        - name: mailcow-data
+          mountPath: /var/vmail
+          subPath: vmail
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      # SOGo (Webmail UI)
+      - name: sogo
+        image: mailcow/sogo:1.70
+        ports:
+        - containerPort: 20000
+          name: http
+        env:
+        - name: SOGO_OIDC_ENABLED
+          value: "false"  # Будет настроено позже
+        volumeMounts:
+        - name: mailcow-data
+          mountPath: /var/lib/sogo
+          subPath: sogo
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+      volumes:
+      - name: mailcow-data
+        persistentVolumeClaim:
+          claimName: mailcow-data
+---
+# SMTP Service (для использования другими сервисами)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailcow-smtp
+  namespace: mailcow
+spec:
+  selector:
+    app: mailcow
+  ports:
+  - name: smtp
+    port: 25
+    targetPort: 25
+    protocol: TCP
+  - name: submission
+    port: 587
+    targetPort: 587
+    protocol: TCP
+  type: ClusterIP
+---
+# IMAP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailcow-imap
+  namespace: mailcow
+spec:
+  selector:
+    app: mailcow
+  ports:
+  - name: imap
+    port: 143
+    targetPort: 143
+  - name: imaps
+    port: 993
+    targetPort: 993
+  type: ClusterIP
+---
+# Webmail Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailcow-webmail
+  namespace: mailcow
+spec:
+  selector:
+    app: mailcow
+  ports:
+  - name: http
+    port: 80
+    targetPort: 20000
+  type: ClusterIP
+---
+# Ingress для Webmail
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mailcow-webmail
+  namespace: mailcow
+  annotations:
+    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - mail.ceres.local
+    secretName: mailcow-tls
+  rules:
+  - host: mail.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mailcow-webmail
+            port:
+              number: 80

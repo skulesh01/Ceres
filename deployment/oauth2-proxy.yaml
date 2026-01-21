@@ -1,0 +1,134 @@
+# OAuth2 Proxy for services without native OIDC support
+# Protects: Mailcow, Portainer, Adminer, MinIO, Prometheus
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oauth2-proxy
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oauth2-proxy-secret
+  namespace: oauth2-proxy
+type: Opaque
+stringData:
+  client-id: oauth2-proxy
+  client-secret: oauth2-proxy-secret-2025
+  cookie-secret: aGVsbG93b3JsZHRoaXNpc2FzZWNyZXQ=  # base64 encoded 32-char string
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-config
+  namespace: oauth2-proxy
+data:
+  oauth2_proxy.cfg: |
+    provider = "keycloak-oidc"
+    provider_display_name = "CERES SSO"
+    redirect_url = "https://ceres.local/oauth2/callback"
+    oidc_issuer_url = "https://keycloak.ceres.local/realms/ceres"
+    
+    upstreams = [ "file:///dev/null" ]
+    http_address = "0.0.0.0:4180"
+    
+    email_domains = [ "*" ]
+    cookie_domains = [ ".ceres.local" ]
+    whitelist_domains = [ ".ceres.local" ]
+    
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "lax"
+    
+    set_xauthrequest = true
+    set_authorization_header = true
+    pass_authorization_header = true
+    pass_access_token = true
+    pass_user_headers = true
+    
+    skip_provider_button = true
+    
+    session_store_type = "cookie"
+    cookie_expire = "168h"
+    cookie_refresh = "1h"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+    spec:
+      containers:
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.5.1
+        args:
+        - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+        env:
+        - name: OAUTH2_PROXY_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secret
+              key: client-id
+        - name: OAUTH2_PROXY_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secret
+              key: client-secret
+        - name: OAUTH2_PROXY_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oauth2-proxy-secret
+              key: cookie-secret
+        ports:
+        - containerPort: 4180
+          name: http
+        volumeMounts:
+        - name: config
+          mountPath: /etc/oauth2-proxy
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 4180
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 4180
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: config
+        configMap:
+          name: oauth2-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+spec:
+  selector:
+    app: oauth2-proxy
+  ports:
+  - name: http
+    port: 4180
+    targetPort: 4180
+  type: ClusterIP

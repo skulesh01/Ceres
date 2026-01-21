@@ -1,0 +1,24 @@
+# IP-based Ingress for direct access without hosts file
+# Access all services directly via http://192.168.1.3/
+# Traefik will route to Keycloak by default (main landing page)
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-ip
+  namespace: ceres
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "1"
+spec:
+  ingressClassName: traefik
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 8080

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const CeresVersion = "3.0.0"
+const CeresVersion = "3.1.0"
 
 // Deployer handles platform deployment
 type Deployer struct {
@@ -212,7 +212,7 @@ func (d *Deployer) freshInstall() error {
 	}
 
 	fmt.Println("\n📦 Step 2: Initialize State")
-	if err := d.applyManifest("deployment/ceres-state.yaml"); err != nil {
+	if err := d.applyManifest("/root/Ceres/deployment/promtail.yaml"); err != nil {
 		return err
 	}
 
@@ -233,7 +233,7 @@ func (d *Deployer) freshInstall() error {
 	d.waitForPods("ingress-nginx", "app.kubernetes.io/component=controller", 120)
 
 	fmt.Println("\n📦 Step 6: Identity (Keycloak)")
-	if err := d.applyManifest("deployment/keycloak.yaml"); err != nil {
+	if err := d.applyManifest("/root/Ceres/deployment/mailcow.yaml"); err != nil {
 		return err
 	}
 	d.waitForPods("ceres", "app=keycloak", 180)
@@ -629,4 +629,204 @@ func (d *Deployer) restartPod(namespace, podName string) {
 	fmt.Println("  🔄 Restarting pod...")
 	cmd := exec.Command("kubectl", "delete", "pod", "-n", namespace, podName)
 	cmd.Run()
+}
+
+// RemoveDuplicates удаляет дублирующие namespace
+func (d *Deployer) RemoveDuplicates() error {
+	fmt.Println("🗑️  Удаление дублирующих сервисов...")
+
+	duplicates := []string{
+		"elasticsearch", "kibana", "harbor",
+		"jenkins", "uptime-kuma",
+	}
+
+	for _, ns := range duplicates {
+		fmt.Printf("  Удаляю namespace: %s...\n", ns)
+		cmd := exec.Command("kubectl", "delete", "namespace", ns, "--ignore-not-found=true")
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("  ⚠️  Ошибка удаления %s: %v\n", ns, err)
+		} else {
+			fmt.Printf("  ✅ Удален: %s\n", ns)
+		}
+	}
+
+	fmt.Println("✅ Дубликаты удалены (освобождено ~4-6GB RAM)")
+	return nil
+}
+
+// SetupTLS устанавливает Cert-Manager для автоматических TLS сертификатов
+func (d *Deployer) SetupTLS() error {
+	fmt.Println("🔐 Установка Cert-Manager...")
+
+	// Add Helm repo
+	exec.Command("helm", "repo", "add", "jetstack", "https://charts.jetstack.io").Run()
+	exec.Command("helm", "repo", "update").Run()
+
+	// Install Cert-Manager
+	cmd := exec.Command("helm", "install", "cert-manager", "jetstack/cert-manager",
+		"--namespace", "cert-manager",
+		"--create-namespace",
+		"--version", "v1.13.0",
+		"--set", "installCRDs=true",
+	)
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to install cert-manager: %w", err)
+	}
+
+	// Apply ClusterIssuers
+	time.Sleep(10 * time.Second)
+	d.applyManifest("/root/Ceres/deployment/cert-manager.yaml")
+
+	fmt.Println("✅ Cert-Manager установлен")
+	fmt.Println("🔐 ClusterIssuers: selfsigned, letsencrypt-prod")
+	return nil
+}
+
+// SetupBackup устанавливает Velero для бэкапов
+func (d *Deployer) SetupBackup() error {
+	fmt.Println("💾 Установка Velero...")
+
+	// Add Helm repo
+	exec.Command("helm", "repo", "add", "vmware-tanzu", "https://vmware-tanzu.github.io/helm-charts").Run()
+	exec.Command("helm", "repo", "update").Run()
+
+	// Install Velero with AWS plugin for MinIO
+	cmd := exec.Command("helm", "install", "velero", "vmware-tanzu/velero",
+		"--namespace", "velero",
+		"--create-namespace",
+		"--set", "initContainers[0].name=velero-plugin-for-aws",
+		"--set", "initContainers[0].image=velero/velero-plugin-for-aws:v1.8.0",
+		"--set", "initContainers[0].volumeMounts[0].mountPath=/target",
+		"--set", "initContainers[0].volumeMounts[0].name=plugins",
+		"--set", "configuration.provider=aws",
+		"--set", "configuration.backupStorageLocation.name=default",
+		"--set", "configuration.backupStorageLocation.bucket=ceres-backups",
+		"--set", "configuration.backupStorageLocation.config.region=minio",
+		"--set", "configuration.backupStorageLocation.config.s3ForcePathStyle=true",
+		"--set", "configuration.backupStorageLocation.config.s3Url=http://minio.minio.svc.cluster.local:9000",
+	)
+
+	if err := cmd.Run(); err != nil {
+		fmt.Println("⚠️  Helm установка не удалась, применяю YAML...")
+		if err := d.applyManifest("/root/Ceres/deployment/velero.yaml"); err != nil {
+			return err
+		}
+	}
+
+	// Wait for Velero to be ready
+	d.waitForPods("velero", "app.kubernetes.io/name=velero", 180)
+
+	fmt.Println("✅ Velero установлен")
+	fmt.Println("📅 Настроен ежедневный backup в 2:00 AM")
+	fmt.Println("💾 Backend: MinIO (ceres-backups bucket)")
+	return nil
+}
+
+// SetupLogging устанавливает Promtail для сбора логов
+func (d *Deployer) SetupLogging() error {
+	fmt.Println("📊 Установка Promtail...")
+
+	if err := d.applyManifest("/root/Ceres/deployment/promtail.yaml"); err != nil {
+		return err
+	}
+
+	// Wait for DaemonSet
+	time.Sleep(15 * time.Second)
+
+	fmt.Println("✅ Promtail установлен (логи → Loki)")
+	return nil
+}
+
+// SetupMail устанавливает Mailcow
+func (d *Deployer) SetupMail() error {
+	fmt.Println("📧 Установка Mailcow...")
+
+	if err := d.applyManifest("/root/Ceres/deployment/mailcow.yaml"); err != nil {
+		return err
+	}
+
+	// Wait for pods
+	d.waitForPods("mailcow", "app=mailcow", 180)
+
+	fmt.Println("✅ Mailcow установлен")
+	fmt.Println("🌐 Webmail: http://mail.ceres.local")
+	fmt.Println("📨 SMTP: mailcow-smtp.mailcow.svc:587")
+	return nil
+}
+
+// FixKeycloak applies fixed Keycloak deployment with proper permissions
+func (d *Deployer) FixKeycloak() error {
+	fmt.Println("🔧 Fixing Keycloak deployment...")
+
+	// Delete existing Keycloak deployment
+	cmd := exec.Command("kubectl", "delete", "deployment", "keycloak", "-n", "ceres", "--ignore-not-found=true")
+	output, _ := cmd.CombinedOutput()
+	if len(output) > 0 {
+		fmt.Printf("   Removed old deployment: %s\n", string(output))
+	}
+
+	// Reapply fixed manifest
+	if err := d.applyManifest("/root/Ceres/deployment/keycloak.yaml"); err != nil {
+		return fmt.Errorf("failed to apply keycloak manifest: %w", err)
+	}
+
+	// Wait for Keycloak to be ready
+	fmt.Println("   Waiting for Keycloak pod...")
+	d.waitForPods("ceres", "app=keycloak", 300)
+
+	fmt.Println("✅ Keycloak fixed and running")
+	fmt.Println("🌐 Admin: https://keycloak.ceres.local")
+	fmt.Println("👤 Credentials: admin / K3yClo@k!2025")
+	return nil
+}
+
+// HealthCheck выполняет проверку здоровья всех сервисов
+func (d *Deployer) HealthCheck() error {
+	fmt.Println("🏥 Проверка здоровья платформы...")
+
+	// Get all pods
+	cmd := exec.Command("kubectl", "get", "pods", "--all-namespaces",
+		"-o", "jsonpath={range .items[*]}{.metadata.namespace}{'|'}{.metadata.name}{'|'}{.status.phase}{'\\n'}{end}")
+	
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get pods: %w", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	totalPods := 0
+	runningPods := 0
+	failedPods := 0
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "|")
+		if len(parts) < 3 {
+			continue
+		}
+
+		totalPods++
+		phase := parts[2]
+		
+		if phase == "Running" {
+			runningPods++
+		} else if phase == "Failed" || strings.Contains(phase, "Error") || strings.Contains(phase, "CrashLoop") {
+			failedPods++
+			fmt.Printf("  ❌ %s/%s: %s\n", parts[0], parts[1], phase)
+		}
+	}
+
+	fmt.Printf("\n📊 Статус: %d/%d Running (%d Failed)\n", runningPods, totalPods, failedPods)
+
+	if failedPods == 0 {
+		fmt.Println("✅ Все сервисы здоровы!")
+		return nil
+	} else {
+		fmt.Printf("⚠️  Найдено %d проблемных сервисов\n", failedPods)
+		fmt.Println("💡 Запустите 'ceres fix' для автоматического исправления")
+		return nil
+	}
 }

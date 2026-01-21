@@ -1,7 +1,10 @@
 # ⚡ CERES - Quick Start Guide
 
-**Version**: 3.0.0  
-**Updated**: January 20, 2026
+**Version**: 3.1.0  
+**Updated**: January 22, 2026
+
+> 🔧 **New in 3.1**: Fixed Ingress controller issues - now using Traefik (built-in K3s)  
+> See [INGRESS_FIX.md](docs/INGRESS_FIX.md) for details
 
 ---
 
@@ -78,7 +81,36 @@ make build
 
 ---
 
-## 📚 Documentation
+## � Troubleshooting
+
+### Ingress Not Working?
+If services are not accessible via web browser:
+```bash
+./scripts/fix-ingress.sh
+```
+
+This will:
+- ✅ Switch from problematic ingress-nginx to Traefik
+- ✅ Fix Keycloak permissions
+- ✅ Enable direct IP access (no hosts file needed)
+
+See full guide: [docs/INGRESS_FIX.md](docs/INGRESS_FIX.md)
+
+### Access Services
+
+**Option 1: Direct IP (easiest)**
+- Keycloak: `http://192.168.1.3/`
+- Login: `admin` / `admin123`
+
+**Option 2: Domains (requires hosts file)**
+Add to `/etc/hosts` or `C:\Windows\System32\drivers\etc\hosts`:
+```
+192.168.1.3 keycloak.ceres.local gitlab.ceres.local grafana.ceres.local
+```
+
+---
+
+## �📚 Documentation
 
 - **Full Guide**: [docs/AUTO_INSTALL.md](docs/AUTO_INSTALL.md)
 - **Structure**: [PROJECT_STRUCTURE_FINAL.md](PROJECT_STRUCTURE_FINAL.md)

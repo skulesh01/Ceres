@@ -1,0 +1,143 @@
+# SSO Configuration Patches for CERES Services
+# Apply after Keycloak realm is configured
+
+---
+# GitLab OIDC Configuration
+# Edit gitlab.yml ConfigMap or use kubectl patch
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitlab-oidc-config
+  namespace: gitlab
+data:
+  gitlab.rb: |
+    gitlab_rails['omniauth_enabled'] = true
+    gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
+    gitlab_rails['omniauth_block_auto_created_users'] = false
+    gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']
+    
+    gitlab_rails['omniauth_providers'] = [
+      {
+        'name' => 'openid_connect',
+        'label' => 'CERES SSO',
+        'args' => {
+          'name' => 'openid_connect',
+          'scope' => ['openid', 'profile', 'email'],
+          'response_type' => 'code',
+          'issuer' => 'https://keycloak.ceres.local/realms/ceres',
+          'discovery' => true,
+          'client_auth_method' => 'query',
+          'uid_field' => 'preferred_username',
+          'client_options' => {
+            'identifier' => 'gitlab',
+            'secret' => 'YOUR_GITLAB_CLIENT_SECRET',
+            'redirect_uri' => 'https://gitlab.ceres.local/users/auth/openid_connect/callback'
+          }
+        }
+      }
+    ]
+
+---
+# Grafana OIDC Configuration
+# Edit grafana.ini or use kubectl patch
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-oidc-config
+  namespace: monitoring
+data:
+  grafana.ini: |
+    [server]
+    root_url = https://grafana.ceres.local
+    
+    [auth.generic_oauth]
+    enabled = true
+    name = CERES SSO
+    allow_sign_up = true
+    client_id = grafana
+    client_secret = YOUR_GRAFANA_CLIENT_SECRET
+    scopes = openid profile email
+    auth_url = https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/auth
+    token_url = https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/token
+    api_url = https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/userinfo
+    role_attribute_path = contains(groups[*], 'admin') && 'Admin' || 'Viewer'
+    
+    [auth]
+    oauth_auto_login = true
+
+---
+# Mattermost OIDC Configuration
+# Edit config.json or use mmctl
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mattermost-oidc-config
+  namespace: mattermost
+data:
+  config.json: |
+    {
+      "GitLabSettings": {
+        "Enable": true,
+        "Id": "mattermost",
+        "Secret": "YOUR_MATTERMOST_CLIENT_SECRET",
+        "Scope": "openid profile email",
+        "AuthEndpoint": "https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/auth",
+        "TokenEndpoint": "https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/token",
+        "UserApiEndpoint": "https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/userinfo"
+      }
+    }
+
+---
+# Wiki.js OIDC Configuration
+# Configure via Web UI: Authentication > OpenID Connect
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wikijs-oidc-config
+  namespace: wikijs
+data:
+  oidc.yml: |
+    title: CERES SSO
+    client_id: wikijs
+    client_secret: YOUR_WIKIJS_CLIENT_SECRET
+    authorization_endpoint: https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/auth
+    token_endpoint: https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/token
+    userinfo_endpoint: https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/userinfo
+    issuer: https://keycloak.ceres.local/realms/ceres
+    logout_url: https://keycloak.ceres.local/realms/ceres/protocol/openid-connect/logout
+    scopes: openid profile email
+
+---
+# Nextcloud OIDC Configuration
+# Install app: occ app:install user_oidc
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextcloud-oidc-config
+  namespace: nextcloud
+data:
+  oidc.config.php: |
+    <?php
+    $CONFIG = array(
+      'oidc_login_provider_url' => 'https://keycloak.ceres.local/realms/ceres',
+      'oidc_login_client_id' => 'nextcloud',
+      'oidc_login_client_secret' => 'YOUR_NEXTCLOUD_CLIENT_SECRET',
+      'oidc_login_auto_redirect' => true,
+      'oidc_login_end_session_redirect' => true,
+      'oidc_login_button_text' => 'Login with CERES SSO',
+      'oidc_login_hide_password_form' => false,
+      'oidc_login_use_id_token' => true,
+      'oidc_login_attributes' => array(
+        'id' => 'preferred_username',
+        'name' => 'name',
+        'mail' => 'email',
+        'groups' => 'groups',
+      ),
+      'oidc_login_default_group' => 'users',
+      'oidc_login_use_external_storage' => false,
+      'oidc_login_scope' => 'openid profile email',
+      'oidc_login_proxy_ldap' => false,
+      'oidc_login_disable_registration' => false,
+      'oidc_login_redir_fallback' => true,
+      'oidc_login_tls_verify' => false,
+    );
