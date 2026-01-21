@@ -3,12 +3,15 @@
 ![CERES](https://img.shields.io/badge/CERES-v3.0.0-blue?style=flat-square)
 ![Go](https://img.shields.io/badge/Go-1.21+-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Build](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)
+
+> **⚠️ ВАЖНО ДЛЯ РАЗРАБОТЧИКОВ**: При каждом коммите обновляй версию! См. [VERSION_GUIDE.md](VERSION_GUIDE.md)
 
 **CERES** is a production-ready, multi-cloud Kubernetes platform built with:
 - 🏗️ **Terraform** - Infrastructure as Code (AWS/Azure/GCP)
-- 📦 **Helm** - Service deployment (20+ services)
+- 📦 **Kubectl** - Direct cluster management (no Helm dependencies)
 - 🔄 **Flux CD** - GitOps automation
-- 🎯 **Go CLI** - Modern command-line interface
+- 🎯 **Go CLI** - Interactive command-line interface with auto-fix capabilities
 
 ## 🚀 Quick Start
 
