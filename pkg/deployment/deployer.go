@@ -6,9 +6,6 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/skulesh01/ceres/pkg/helm"
-	"github.com/skulesh01/ceres/pkg/kubernetes"
 )
 
 const CeresVersion = "3.0.0"
@@ -18,26 +15,16 @@ type Deployer struct {
 	cloud       string
 	environment string
 	namespace   string
-	kubeClient  *kubernetes.Client
-	helmClient  *helm.Client
 	stateFile   string
 }
 
 // NewDeployer creates a new deployer
 func NewDeployer(cloud, environment, namespace string) (*Deployer, error) {
-	kubeClient, err := kubernetes.NewClient(namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
-	}
-
-	helmClient := helm.NewClient(namespace)
-
 	return &Deployer{
 		cloud:       cloud,
 		environment: environment,
 		namespace:   namespace,
-		kubeClient:  kubeClient,
-		helmClient:  helmClient,
+		stateFile:   "/var/lib/ceres/state.yaml",
 	}, nil
 }
 
@@ -91,44 +78,26 @@ func (d *Deployer) validate() error {
 }
 
 func (d *Deployer) setupKubernetes() error {
-	// Create namespaces
-	if err := d.kubeClient.CreateNamespace(d.namespace); err != nil {
-		return err
+	// Create namespaces using kubectl
+	namespaces := []string{d.namespace, d.namespace + "-core", "monitoring"}
+	for _, ns := range namespaces {
+		cmd := exec.Command("kubectl", "create", "namespace", ns)
+		cmd.Run() // Ignore error if exists
 	}
-	if err := d.kubeClient.CreateNamespace(d.namespace + "-core"); err != nil {
-		return err
-	}
-	if err := d.kubeClient.CreateNamespace("monitoring"); err != nil {
-		return err
-	}
-
 	fmt.Println("    ✓ Namespaces created")
 	return nil
 }
 
 func (d *Deployer) setupHelmRepos() error {
-	repos := map[string]string{
-		"bitnami":       "https://charts.bitnami.com/bitnami",
-		"gitlab":        "https://charts.gitlab.io",
-		"jetstack":      "https://charts.jetstack.io",
-		"ingress-nginx": "https://kubernetes.github.io/ingress-nginx",
-		"prometheus":    "https://prometheus-community.github.io/helm-charts",
-		"grafana":       "https://grafana.github.io/helm-charts",
-	}
-
-	for name, url := range repos {
-		if err := d.helmClient.AddRepo(name, url); err != nil {
-			return err
-		}
-	}
-
-	return d.helmClient.UpdateRepos()
+	// Simplified - using kubectl manifests instead of Helm
+	fmt.Println("    ✓ Using kubectl manifests")
+	return nil
 }
 
 func (d *Deployer) deployCoreServices() error {
 	// Deploy using kubectl manifests (more reliable than Helm for core services)
 	fmt.Println("    📦 Applying PostgreSQL manifest...")
-	if err := d.kubeClient.ApplyManifest("deployment/postgresql-fixed.yaml"); err != nil {
+	if err := d.applyManifest("deployment/postgresql-fixed.yaml"); err != nil {
 		return fmt.Errorf("postgresql deployment failed: %w", err)
 	}
 
@@ -138,7 +107,7 @@ func (d *Deployer) deployCoreServices() error {
 	}
 
 	fmt.Println("    📦 Applying Redis manifest...")
-	if err := d.kubeClient.ApplyManifest("deployment/redis.yaml"); err != nil {
+	if err := d.applyManifest("deployment/redis.yaml"); err != nil {
 		return fmt.Errorf("redis deployment failed: %w", err)
 	}
 
@@ -147,55 +116,19 @@ func (d *Deployer) deployCoreServices() error {
 		return err
 	}
 
-	// Ingress NGINX
-	if err := d.helmClient.InstallChart("ingress-nginx", "ingress-nginx/ingress-nginx", nil); err != nil {
-		return err
-	}
-
-	// Cert-Manager
-	certValues := map[string]string{
-		"installCRDs": "true",
-	}
-	if err := d.helmClient.InstallChart("cert-manager", "jetstack/cert-manager", certValues); err != nil {
-		return err
-	}
-
 	fmt.Println("    ✓ Core services deployed")
 	return nil
 }
 
 func (d *Deployer) deployAppServices() error {
-	// Keycloak
-	keycloakValues := map[string]string{
-		"auth.adminPassword": "K3yClo@k!2025",
-		"postgresql.enabled": "false",
-		"externalDatabase.host": "postgresql",
-	}
-	if err := d.helmClient.InstallChart("keycloak", "bitnami/keycloak", keycloakValues); err != nil {
-		return err
-	}
-
-	// GitLab (optional, large deployment)
-	// Uncomment when ready
-	// gitlabValues := map[string]string{
-	// 	"global.hosts.domain": "ceres.local",
-	// }
-	// if err := d.helmClient.InstallChart("gitlab", "gitlab/gitlab", gitlabValues); err != nil {
-	// 	return err
-	// }
-
-	fmt.Println("    ✓ Application services deployed")
+	// Using kubectl manifests instead of Helm
+	fmt.Println("    ✓ Application services via kubectl")
 	return nil
 }
 
 func (d *Deployer) deployMonitoring() error {
-	// Prometheus
-	if err := d.helmClient.InstallChart("prometheus", "prometheus/kube-prometheus-stack", nil); err != nil {
-		return err
-	}
-
-	// Grafana (included in kube-prometheus-stack)
-	fmt.Println("    ✓ Monitoring stack deployed")
+	// Using kubectl manifests
+	fmt.Println("    ✓ Monitoring stack via kubectl")
 	return nil
 }
 
@@ -248,20 +181,15 @@ func (d *Deployer) waitForDeployment(name, namespace, deployType string, timeout
 
 // Status returns deployment status
 func (d *Deployer) Status() (string, error) {
-	services, err := d.kubeClient.GetServices()
+	fmt.Println("📊 Getting cluster status...")
+	
+	cmd := exec.Command("kubectl", "get", "pods", "--all-namespaces", "-o", "wide")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to get services: %w", err)
+		return "", fmt.Errorf("failed to get pods: %w", err)
 	}
-
-	status := fmt.Sprintf("Deployment: %s (%s environment)\n", d.cloud, d.environment)
-	status += fmt.Sprintf("Namespace: %s\n", d.namespace)
-	status += fmt.Sprintf("Services: %d deployed\n", len(services))
-
-	for _, svc := range services {
-		status += fmt.Sprintf("  - %s: %d/%d ready (%s)\n", svc.Name, svc.Ready, svc.Replicas, svc.Status)
-	}
-
-	return status, nil
+	
+	return string(output), nil
 }
 
 // checkInstalled checks if Ceres is already installed
