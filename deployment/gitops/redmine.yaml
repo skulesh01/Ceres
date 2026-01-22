@@ -1,0 +1,207 @@
+# GitOps-managed Redmine manifest
+# Kept local to this kustomize directory to satisfy Argo CD / kustomize load restrictions.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redmine
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redmine-config
+  namespace: redmine
+data:
+  configuration.yml: |
+    production:
+      email_delivery:
+        delivery_method: :smtp
+        smtp_settings:
+          address: mailcow.ceres.svc.cluster.local
+          port: 587
+          domain: ceres.local
+          authentication: :login
+          user_name: redmine@ceres.local
+          password: redmine_smtp_2025
+
+      attachments_storage_path: /usr/src/redmine/files
+
+      autologin_cookie_name: autologin
+      autologin_cookie_path: /
+      autologin_cookie_secure: false
+
+  additional_environment.rb: |
+    config.after_initialize do
+      Setting.plugin_redmine_backlogs = {
+        'story_trackers' => ['Feature', 'User Story'],
+        'task_tracker' => 'Task',
+        'points_burn_direction' => 'down',
+        'wiki_template' => ''
+      }
+    end
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redmine
+  namespace: redmine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redmine
+  template:
+    metadata:
+      labels:
+        app: redmine
+    spec:
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z postgresql.ceres.svc.cluster.local 5432; do sleep 2; done']
+
+      containers:
+      - name: redmine
+        image: ghcr.io/skulesh01/ceres-redmine:5.1-plugins
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+
+        env:
+        - name: REDMINE_DB_POSTGRES
+          value: postgresql.ceres.svc.cluster.local
+        - name: REDMINE_DB_PORT
+          value: "5432"
+        - name: REDMINE_DB_DATABASE
+          value: redmine
+        - name: REDMINE_DB_USERNAME
+          value: postgres
+        - name: REDMINE_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ceres-credentials
+              key: postgres-password
+              optional: true
+
+        - name: REDMINE_PLUGINS_MIGRATE
+          value: "true"
+
+        - name: REDMINE_LANG
+          value: "ru"
+        - name: TZ
+          value: "Europe/Moscow"
+
+        - name: REDMINE_SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: redmine-secret
+              key: secret-key-base
+              optional: true
+
+        volumeMounts:
+        - name: redmine-data
+          mountPath: /usr/src/redmine/files
+        - name: redmine-plugins-data
+          mountPath: /usr/src/redmine/plugins/data
+        - name: redmine-config
+          mountPath: /usr/src/redmine/config/configuration.yml
+          subPath: configuration.yml
+        - name: redmine-config
+          mountPath: /usr/src/redmine/config/additional_environment.rb
+          subPath: additional_environment.rb
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 5
+
+      volumes:
+      - name: redmine-data
+        persistentVolumeClaim:
+          claimName: redmine-data
+      - name: redmine-plugins-data
+        emptyDir: {}
+      - name: redmine-config
+        configMap:
+          name: redmine-config
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redmine-data
+  namespace: redmine
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redmine
+  namespace: redmine
+spec:
+  selector:
+    app: redmine
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redmine-secret
+  namespace: redmine
+type: Opaque
+stringData:
+  secret-key-base: "change-this-to-random-string-min-30-chars-12345678901234567890"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redmine
+  namespace: redmine
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.middlewares: ceres-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: projects.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: redmine
+            port:
+              number: 3000
+  tls:
+  - hosts:
+    - projects.ceres.local
+    secretName: redmine-tls
