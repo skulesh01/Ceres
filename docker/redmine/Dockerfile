@@ -27,6 +27,10 @@ RUN git clone --depth=1 https://github.com/backlogs/redmine_backlogs.git
 # NOTE: In GNU sed BRE, '?' is literal; do NOT escape it, otherwise it becomes a quantifier.
 RUN sed -i 's/File\.exists?/File.exist?/g' redmine_backlogs/Gemfile
 
+# Bundler (newer versions) errors if the same gem is declared twice with different constraints.
+# Redmine already declares `holidays`, so make Backlogs not pin it.
+RUN sed -i 's/^\s*gem "holidays".*$/gem "holidays"/g' redmine_backlogs/Gemfile
+
 # 2. Issue Templates - Шаблоны задач (Bug, Feature, Support)
 RUN git clone --depth=1 https://github.com/akiko-pusu/redmine_issue_templates.git
 
@@ -84,10 +88,6 @@ RUN git clone --depth=1 https://github.com/anteo/redmine_custom_workflows.git
 
 # Install plugin dependencies
 WORKDIR /usr/src/redmine
-
-# Create Gemfile.local for plugin dependencies
-RUN echo "gem 'holidays'" >> Gemfile.local && \
-    echo "gem 'icalendar'" >> Gemfile.local
 
 # IMPORTANT:
 # - Do not run `bundle install` at build time.
