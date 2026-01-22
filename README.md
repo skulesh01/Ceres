@@ -146,11 +146,26 @@ CERES includes production-ready automation:
 
 # Update to latest version
 ./scripts/update.sh
+
+# 🆕 Advanced Features (v3.2.0)
+# Auto-configure DNS with cloud providers
+./scripts/configure-dns.sh
+
+# Integrate Slack notifications
+./scripts/integrate-slack.sh
+
+# Apply custom company branding
+./scripts/apply-branding.sh
 ```
 
 **Or run everything at once:**
 ```bash
 ./deploy-platform.sh --production  # Full production setup
+
+# Optional: Advanced customization
+./scripts/configure-dns.sh      # Auto DNS setup
+./scripts/integrate-slack.sh    # Slack alerts
+./scripts/apply-branding.sh     # Custom branding
 ```
 
 ---
