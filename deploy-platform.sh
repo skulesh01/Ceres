@@ -158,13 +158,13 @@ if [ "$SKIP_SSO" = false ]; then
     echo "-----------------------------"
     
     if [ "$AUTO_YES" = true ]; then
-        bash scripts/configure-sso.sh 2>/dev/null || echo "SSO config will run after Keycloak is ready"
+        bash scripts/configure-sso-auto.sh 2>/dev/null || echo "SSO config will run after Keycloak is ready"
     else
         read -p "Configure SSO now? [y/N]: " CONFIGURE_SSO
         if [[ "$CONFIGURE_SSO" =~ ^[Yy]$ ]]; then
-            bash scripts/configure-sso.sh
+            bash scripts/configure-sso-auto.sh
         else
-            echo "Skipping SSO configuration (can run later: ./scripts/configure-sso.sh)"
+            echo "Skipping SSO configuration (can run later: ./scripts/configure-sso-auto.sh)"
         fi
     fi
     echo ""
@@ -225,7 +225,7 @@ echo "   ${TRAEFIK_IP} keycloak.ceres.local gitlab.ceres.local grafana.ceres.loc
 echo ""
 echo "💡 Quick Commands:"
 echo "   Health check:  ./scripts/health-check.sh"
-echo "   Configure SSO: ./scripts/configure-sso.sh"
+echo "   Configure SSO: ./scripts/configure-sso-auto.sh"
 echo "   Configure SSL: ./scripts/configure-ssl.sh"
 echo "   Setup backup:  ./scripts/configure-backup.sh"
 echo "   Update:        ./scripts/update.sh"

@@ -1,195 +1,125 @@
-# ⚡ CERES - Quick Start Guide
+# 🚀 CERES Quick Start - 30 Minutes to Production
 
-**Version**: 3.1.0  
-**Updated**: January 22, 2026
-
-> 🔧 **New in 3.1**: Fixed Ingress controller issues - now using Traefik (built-in K3s)  
-> See [INGRESS_FIX.md](docs/INGRESS_FIX.md) for details
+**Everything pre-configured. No manual setup required.**
 
 ---
 
-## 🎯 ONE Command Deployment
+## ⚡ What You Get
 
-### Linux / macOS
-```bash
-git clone https://github.com/skulesh01/ceres.git
-cd ceres
-./quick-deploy.sh
-```
+One command deploys **7 fully integrated services**:
 
-### Windows
-```powershell
-git clone https://github.com/skulesh01/ceres.git
-cd ceres
-.\quick-deploy.ps1
-```
+- ✅ **Keycloak** - Central SSO authentication
+- ✅ **GitLab** - Git + CI/CD (SSO integrated)
+- ✅ **Grafana** - Monitoring dashboards (SSO integrated)
+- ✅ **Mattermost** - Team chat (SSO integrated)
+- ✅ **Nextcloud** - File storage (SSO integrated)
+- ✅ **MinIO** - S3-compatible storage (SSO integrated)
+- ✅ **Wiki.js** - Team documentation
 
-**That's it! 🎉** The script will:
-- ✅ Auto-detect Docker or install Go
-- ✅ Build CERES CLI automatically
-- ✅ Show you next steps
+**Plus automated infrastructure:**
+- 🔒 HTTPS (cert-manager + Let's Encrypt)
+- 💾 Daily + Weekly backups (Velero)
+- 🏥 Health monitoring
+- 🔄 One-click updates
 
----
-
-## 🚀 After Deployment
-
-### 1. Validate
-```bash
-./bin/ceres validate
-```
-
-### 2. Configure
-```bash
-./bin/ceres config show
-```
-
-### 3. Deploy (Dry Run)
-```bash
-./bin/ceres deploy --dry-run --cloud aws --environment dev
-```
-
-### 4. Deploy (Production)
-```bash
-./bin/ceres deploy --cloud aws --environment prod
-```
-
-### 5. Check Status
-```bash
-./bin/ceres status
-```
+**Login once → Access everything. Zero manual configuration.**
 
 ---
 
-## 📋 Alternative Methods
+## 🚀 Three Commands, 30 Minutes
 
-### Method 1: Docker Build (No Local Go)
 ```bash
-./scripts/docker-build.sh        # Linux/macOS
-.\scripts\docker-build.ps1       # Windows
+# 1. Install Kubernetes (5 min)
+curl -sfL https://get.k3s.io | sh -
+
+# 2. Deploy CERES (25 min)
+git clone https://github.com/skulesh01/Ceres.git && cd Ceres && ./deploy-platform.sh -y
+
+# 3. Access (instant)
+http://YOUR_SERVER_IP/
+# Login: demo / demo123
 ```
 
-### Method 2: Auto-Install Go
-```bash
-./scripts/setup-go.sh            # Linux/macOS
-.\scripts\setup-go.ps1           # Windows
-```
-
-### Method 3: Manual (Requires Go 1.21+)
-```bash
-make build
-```
+**That's it!** All services pre-configured with SSO. 🎉
 
 ---
 
-## � Troubleshooting
+## 📖 Detailed Guide
 
-### Ingress Not Working?
-If services are not accessible via web browser:
-```bash
-./scripts/fix-ingress.sh
-```
-
-This will:
-- ✅ Switch from problematic ingress-nginx to Traefik
-- ✅ Fix Keycloak permissions
-- ✅ Enable direct IP access (no hosts file needed)
-
-See full guide: [docs/INGRESS_FIX.md](docs/INGRESS_FIX.md)
-
-### Access Services
-
-**Option 1: Direct IP (easiest)**
-- Keycloak: `http://192.168.1.3/`
-- Login: `admin` / `admin123`
-
-**Option 2: Domains (requires hosts file)**
-Add to `/etc/hosts` or `C:\Windows\System32\drivers\etc\hosts`:
-```
-192.168.1.3 keycloak.ceres.local gitlab.ceres.local grafana.ceres.local
-```
+See [Full QuickStart Guide](QUICKSTART_DETAILED.md) for:
+- Prerequisites
+- Step-by-step installation
+- Service access instructions
+- First login workflow
+- Common tasks
+- Troubleshooting
 
 ---
 
-## �📚 Documentation
+## ✅ What's Automatically Configured
 
-- **Full Guide**: [docs/AUTO_INSTALL.md](docs/AUTO_INSTALL.md)
-- **Structure**: [PROJECT_STRUCTURE_FINAL.md](PROJECT_STRUCTURE_FINAL.md)
-- **Building**: [docs/BUILDING.md](docs/BUILDING.md)
+**SSO Integration:**
+- All services connected to Keycloak
+- One login = access to everything
+- No manual OAuth configuration
 
----
+**Security:**
+- HTTPS certificates (Let's Encrypt or self-signed)
+- HTTP → HTTPS redirect
+- Secure secrets management
 
-## ⚙️ Prerequisites
+**Backups:**
+- Daily backups (2 AM, 30-day retention)
+- Weekly backups (Sunday 3 AM, 90-day retention)
+- One-command restore
 
-**Choose ONE:**
-- ✅ Docker 20.10+ (Recommended)
-- ✅ curl + bash (Auto-install Go)
-- ✅ Go 1.21+ (Manual build)
-
----
-
-## 🎯 Deployment Time
-
-- **With Docker**: ~3 minutes
-- **Without Docker**: ~5 minutes (includes Go installation)
-- **With Go installed**: ~30 seconds
-
----
-
-## 🆘 Troubleshooting
-
-### Issue: Docker not found
-```bash
-# Install Docker
-curl -sSL https://get.docker.com | sh
-```
-
-### Issue: Permission denied
-```bash
-chmod +x quick-deploy.sh scripts/*.sh
-```
-
-### Issue: Go installation failed
-```bash
-# Use Docker instead
-./scripts/docker-build.sh
-```
+**Monitoring:**
+- Health checks for all services
+- Grafana dashboards
+- Prometheus metrics
 
 ---
 
-## ✅ Verify Installation
+## 🔑 Default Credentials
+
+**All Services:**
+- Username: `demo`
+- Password: `demo123`
+
+**Admin:**
+- Keycloak: `admin` / `admin123`
+- MinIO: `minioadmin` / `MinIO@Admin2025`
+
+⚠️ **Change in production!**
+
+---
+
+## 💰 Value Proposition
+
+| Item | Traditional | CERES | Savings |
+|------|-------------|-------|---------|
+| DevOps Engineer | $120k/year | $0 | $120k |
+| AWS Services | $24k/year | $0 | $24k |
+| Server | $0 | $1.2k/year | -$1.2k |
+| Setup Time | 2-4 weeks | 30 min | 🚀 |
+| **Total Year 1** | **$144k** | **$1.2k** | **$142.8k** 💰 |
+
+---
+
+## 🆘 Quick Links
+
+- 📖 [Detailed QuickStart](QUICKSTART_DETAILED.md)
+- 📚 [Full Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
+- 📝 [Command Reference](QUICK_REFERENCE.md)
+- 🏗️ [Architecture](ARCHITECTURE_ANALYSIS.md)
+- 🐛 [GitHub Issues](https://github.com/skulesh01/Ceres/issues)
+
+---
+
+**Ready to deploy?**
 
 ```bash
-# Check CLI version
-./bin/ceres version
-
-# Show help
-./bin/ceres --help
-
-# List commands
-./bin/ceres
+curl -fsSL https://github.com/skulesh01/Ceres/raw/main/deploy-platform.sh | bash -s -- -y
 ```
 
-**Expected output:**
-```
-CERES Platform v3.0.0
-Cloud Infrastructure Deployment Tool
-
-Available Commands:
-  deploy      Deploy CERES platform
-  status      Show deployment status
-  config      Manage configuration
-  validate    Validate infrastructure
-```
-
----
-
-## 🎉 Success!
-
-If you see the commands above, you're ready to deploy! 🚀
-
-**Next**: Read [docs/AUTO_INSTALL.md](docs/AUTO_INSTALL.md) for deployment scenarios.
-
----
-
-**Support**: https://github.com/skulesh01/ceres/issues  
-**License**: MIT
+30 minutes later → Enterprise platform! 🚀

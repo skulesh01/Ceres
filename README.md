@@ -79,9 +79,11 @@ Script will:
 1. ✅ Validate system (RAM, CPU, disk, ports)
 2. ✅ Deploy all services
 3. ✅ Configure SSL/TLS (HTTPS)
-4. ✅ Setup SSO (single sign-on)
+4. ✅ Setup SSO (single sign-on) **with full service integration**
 5. ✅ Configure automated backups
 6. ✅ Run health checks
+
+**All services are pre-configured and ready to use!** No manual configuration needed.
 
 ### Step 3: Access Your Platform
 
