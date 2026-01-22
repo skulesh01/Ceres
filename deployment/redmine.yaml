@@ -65,6 +65,24 @@ spec:
         app: redmine
     spec:
       initContainers:
+      # Initialize a writable config dir (avoid ConfigMap read-only mounts under /usr/src/redmine/config)
+      - name: init-config
+        image: ghcr.io/skulesh01/ceres-redmine:5.1-plugins
+        imagePullPolicy: Always
+        command:
+          - sh
+          - -c
+          - >-
+            set -e;
+            cp -a /usr/src/redmine/config/. /config/;
+            cp /config-ro/configuration.yml /config/configuration.yml;
+            cp /config-ro/additional_environment.rb /config/additional_environment.rb
+        volumeMounts:
+        - name: redmine-config-dir
+          mountPath: /config
+        - name: redmine-config
+          mountPath: /config-ro
+          readOnly: true
       # Wait for PostgreSQL
       - name: wait-for-db
         image: busybox:1.36
@@ -120,12 +138,8 @@ spec:
           mountPath: /usr/src/redmine/files
         - name: redmine-plugins-data
           mountPath: /usr/src/redmine/plugins/data
-        - name: redmine-config
-          mountPath: /usr/src/redmine/config/configuration.yml
-          subPath: configuration.yml
-        - name: redmine-config
-          mountPath: /usr/src/redmine/config/additional_environment.rb
-          subPath: additional_environment.rb
+        - name: redmine-config-dir
+          mountPath: /usr/src/redmine/config
         
         resources:
           requests:
@@ -155,6 +169,8 @@ spec:
         persistentVolumeClaim:
           claimName: redmine-data
       - name: redmine-plugins-data
+        emptyDir: {}
+      - name: redmine-config-dir
         emptyDir: {}
       - name: redmine-config
         configMap:
