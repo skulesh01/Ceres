@@ -94,6 +94,24 @@ RUN git clone https://github.com/eyp/redmine_spent_time.git
 # 21. Issue Charts - Графики и аналитика
 RUN git clone https://github.com/masaki-yamakawa/redmine_issue_charts.git
 
+# 22. Approval Workflow - Согласование документов
+RUN git clone https://github.com/haru/redmine_approval.git
+
+# 23. Questions - Вопросы и ответы
+RUN git clone https://github.com/infohiroba/redmine_questions.git
+
+# 24. Custom Workflows - Расширенная автоматизация
+RUN git clone https://github.com/anteo/redmine_custom_workflows.git
+
+# 25. Automation - Триггеры и правила
+RUN git clone https://github.com/southbridgeio/redmine_automation.git
+
+# 26. Better Gantt - Улучшенная диаграмма Ганта
+RUN git clone https://github.com/redmineup/redmine_better_gantt_chart.git
+
+# 27. Resources - Управление ресурсами
+RUN git clone https://github.com/arkhitech/redmine_resources.git
+
 # ============================================
 # THEMES
 # ============================================
