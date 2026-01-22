@@ -473,7 +473,9 @@ spec:
   - port: 3000
     targetPort: 3000
 ---
-# 10. Redmine
+# 10. Redmine - Full-Featured Project Management
+# NOTE: Use deployment/redmine.yaml for production setup with plugins
+# This is a minimal deployment for quick start
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -494,23 +496,39 @@ spec:
       labels:
         app: redmine
     spec:
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z postgresql.ceres.svc.cluster.local 5432; do sleep 2; done']
       containers:
       - name: redmine
-        image: redmine:5.1
+        image: redmine-ceres:5.1-plugins
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
         env:
         - name: REDMINE_DB_POSTGRES
-          value: postgresql.ceres-core.svc.cluster.local
+          value: postgresql.ceres.svc.cluster.local
         - name: REDMINE_DB_DATABASE
           value: redmine
         - name: REDMINE_DB_USERNAME
           value: postgres
         - name: REDMINE_DB_PASSWORD
           value: ceres_postgres_2025
+        - name: REDMINE_LANG
+          value: "ru"
+        - name: TZ
+          value: "Europe/Moscow"
         volumeMounts:
         - name: redmine-data
           mountPath: /usr/src/redmine/files
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
       volumes:
       - name: redmine-data
         emptyDir: {}
