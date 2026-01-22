@@ -38,6 +38,8 @@ RUN sed -i 's/^\s*gem "nokogiri".*$/# gem "nokogiri"/g' redmine_backlogs/Gemfile
 # Remove them to avoid conflicts with modern Redmine/Bundler.
 RUN sed -i '/capybara/d' redmine_backlogs/Gemfile
 RUN sed -i '/poltergeist/d' redmine_backlogs/Gemfile
+RUN sed -i '/simplecov/d' redmine_backlogs/Gemfile
+RUN sed -i '/rcov/d' redmine_backlogs/Gemfile
 
 # 2. Issue Templates - Шаблоны задач (Bug, Feature, Support)
 RUN git clone --depth=1 https://github.com/akiko-pusu/redmine_issue_templates.git
