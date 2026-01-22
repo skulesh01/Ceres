@@ -130,7 +130,13 @@ CERES includes production-ready automation:
 ./scripts/configure-ssl.sh
 
 # SSO configuration (auto-create OIDC clients)
-./scripts/configure-sso.sh
+./scripts/configure-sso-auto.sh
+
+# Services content setup (dashboards, projects, channels)
+./scripts/setup-services.sh
+
+# Production essentials (CI/CD runners, alerts, email, security)
+./scripts/production-essentials.sh
 
 # Backup automation (daily + weekly schedules)
 ./scripts/configure-backup.sh
@@ -140,6 +146,11 @@ CERES includes production-ready automation:
 
 # Update to latest version
 ./scripts/update.sh
+```
+
+**Or run everything at once:**
+```bash
+./deploy-platform.sh --production  # Full production setup
 ```
 
 ---

@@ -36,7 +36,9 @@ SKIP_PREFLIGHT=false
 SKIP_SSL=false
 SKIP_SSO=false
 SKIP_BACKUP=false
+SKIP_PRODUCTION=false
 AUTO_YES=false
+PRODUCTION_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -44,17 +46,26 @@ while [[ $# -gt 0 ]]; do
         --skip-ssl) SKIP_SSL=true; shift ;;
         --skip-sso) SKIP_SSO=true; shift ;;
         --skip-backup) SKIP_BACKUP=true; shift ;;
+        --skip-production) SKIP_PRODUCTION=true; shift ;;
+        --production) PRODUCTION_MODE=true; shift ;;
         -y|--yes) AUTO_YES=true; shift ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --skip-preflight    Skip pre-flight system checks"
-            echo "  --skip-ssl          Skip SSL/TLS configuration"
-            echo "  --skip-sso          Skip SSO auto-configuration"
-            echo "  --skip-backup       Skip backup configuration"
-            echo "  -y, --yes           Auto-confirm all prompts"
-            echo "  -h, --help          Show this help"
+            echo "  --skip-preflight     Skip pre-flight system checks"
+            echo "  --skip-ssl           Skip SSL/TLS configuration"
+            echo "  --skip-sso           Skip SSO auto-configuration"
+            echo "  --skip-backup        Skip backup configuration"
+            echo "  --skip-production    Skip production essentials"
+            echo "  --production         Enable production mode (auto-configures everything)"
+            echo "  -y, --yes            Auto-confirm all prompts"
+            echo "  -h, --help           Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  $0 -y                         # Quick deployment (prompts for production)"
+            echo "  $0 --production               # Full production setup"
+            echo "  $0 --skip-ssl --skip-backup   # Minimal deployment"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -210,8 +221,32 @@ else
 fi
 echo ""
 
-# Step 8: Health Check
-echo -e "${YELLOW}🏥 Step 8: Health Check${NC}"
+# Step 8: Production Essentials (Optional)
+if [ "$SKIP_PRODUCTION" = false ]; then
+    echo -e "${YELLOW}🔧 Step 8: Production Essentials${NC}"
+    echo "-----------------------------------"
+    echo "Configure CI/CD runners, alerts, email, and security..."
+    echo ""
+
+    if [ "$PRODUCTION_MODE" = true ] || [ "$AUTO_YES" = true ]; then
+        echo "Configuring production essentials..."
+        bash scripts/production-essentials.sh
+    else
+        read -p "Configure production essentials (runners, email, alerts)? [Y/n]: " PROD_ESSENTIALS
+        if [[ ! "$PROD_ESSENTIALS" =~ ^[Nn]$ ]]; then
+            bash scripts/production-essentials.sh
+        else
+            echo "Skipping production essentials (can run later: ./scripts/production-essentials.sh)"
+        fi
+    fi
+    echo ""
+else
+    echo -e "${YELLOW}⏭️  Skipping production essentials${NC}"
+    echo ""
+fi
+
+# Step 9: Health Check
+echo -e "${YELLOW}🏥 Step 9: Health Check${NC}"
 echo "------------------------"
 sleep 5
 
