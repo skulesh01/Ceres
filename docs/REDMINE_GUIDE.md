@@ -88,7 +88,33 @@ Login: admin
 Password: admin123
 ```
 
-### 3. First Steps
+### 3. ULTIMATE Setup (Recommended) 🚀
+
+**For full enterprise-level configuration with all integrations:**
+
+```bash
+./scripts/configure-redmine-ultimate.sh
+```
+
+**This configures (in 10 minutes):**
+- ✅ **Email** (SMTP via Mailcow) - Notifications
+- ✅ **Keycloak SSO** (SAML) - Single sign-on
+- ✅ **GitLab Integration** - Auto-close issues from commits
+- ✅ **Mattermost** - Real-time notifications
+- ✅ **Approval Workflows** - Document approval system
+- ✅ **Automation Rules** - Auto-assign, auto-close
+- ✅ **Project Templates** - Software Dev, Marketing, Operations
+- ✅ **Issue Templates** - Bug Report, Feature Request, User Story
+- ✅ **Custom Workflows** - Bug & Feature lifecycles
+- ✅ **Time Tracking** - 8 activity types
+- ✅ **Enterprise Roles** - Product Owner, Scrum Master, Developer, QA, Stakeholder
+- ✅ **Example Project** - Fully configured with sprints, issues, wiki
+- ✅ **Dashboard** - Customizable widgets
+- ✅ **Notifications** - 13 event types
+
+**Result:** Better than Jira Enterprise ($14-$150/user/month)!
+
+### 4. Manual First Steps (If not using Ultimate setup)
 
 1. **Change admin password** (My account → Change password)
 2. **Enable Agile modules**:

@@ -147,7 +147,7 @@ CERES includes production-ready automation:
 # Update to latest version
 ./scripts/update.sh
 
-# 🆕 Advanced Features (v3.2.0)
+# 🆕 Advanced Features (v3.2.0+)
 # Auto-configure DNS with cloud providers
 ./scripts/configure-dns.sh
 
@@ -156,6 +156,10 @@ CERES includes production-ready automation:
 
 # Apply custom company branding
 ./scripts/apply-branding.sh
+
+# 🚀 Redmine Ultimate Setup (Enterprise Project Management)
+./scripts/setup-redmine.sh              # Build & deploy Redmine with 27 plugins
+./scripts/configure-redmine-ultimate.sh  # Full configuration (better than Jira!)
 ```
 
 **Or run everything at once:**
@@ -166,6 +170,10 @@ CERES includes production-ready automation:
 ./scripts/configure-dns.sh      # Auto DNS setup
 ./scripts/integrate-slack.sh    # Slack alerts
 ./scripts/apply-branding.sh     # Custom branding
+
+# Enterprise Project Management (Better than Jira Enterprise!)
+./scripts/setup-redmine.sh              # Deploy Redmine (5 min)
+./scripts/configure-redmine-ultimate.sh  # Configure everything (10 min)
 ```
 
 ---
