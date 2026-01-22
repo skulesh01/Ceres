@@ -59,7 +59,7 @@ spec:
       initContainers:
       - name: wait-for-db
         image: busybox:1.36
-        command: ['sh', '-c', 'until nc -z postgresql.ceres.svc.cluster.local 5432; do sleep 2; done']
+        command: ['sh', '-c', 'until nc -z postgresql.ceres-core.svc.cluster.local 5432; do sleep 2; done']
 
       containers:
       - name: redmine
@@ -71,7 +71,7 @@ spec:
 
         env:
         - name: REDMINE_DB_POSTGRES
-          value: postgresql.ceres.svc.cluster.local
+          value: postgresql.ceres-core.svc.cluster.local
         - name: REDMINE_DB_PORT
           value: "5432"
         - name: REDMINE_DB_DATABASE
