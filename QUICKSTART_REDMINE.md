@@ -49,13 +49,13 @@ git pull origin main
 ```
 
 **Что происходит:**
-1. Собирается Docker image с 27 плагинами (3 мин)
-2. Импортируется в K3s (30 сек)
-3. Создается БД в PostgreSQL (10 сек)
-4. Разворачивается Redmine (30 сек)
-5. Мигрируются все плагины (1 мин)
-6. Создается admin пользователь
-7. Создается пример проекта
+1. Применяются Kubernetes-манифесты Redmine (k3s-native)
+2. Создается БД в PostgreSQL (если нужно)
+3. Redmine стартует из готового образа из registry (по умолчанию GHCR)
+4. Внутренний entrypoint Redmine делает `bundle install` и миграции плагинов
+5. Создается admin пользователь и пример проекта
+
+**Важно:** сборка образа делается не на сервере, а CI workflow: `.github/workflows/redmine-image.yml`.
 
 **Результат:**
 ```
@@ -456,6 +456,9 @@ kubectl exec -n redmine $(kubectl get pod -n redmine -l app=redmine -o name | he
 ```bash
 # 1. Deploy Redmine (5 min)
 ./scripts/setup-redmine.sh
+
+# (Образ Redmine должен быть доступен в registry; собирается CI workflow:
+#  .github/workflows/redmine-image.yml)
 
 # 2. Configure everything (10 min)
 ./scripts/configure-redmine-ultimate.sh

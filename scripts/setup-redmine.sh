@@ -18,34 +18,11 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 
 #=============================================================================
-# BUILD DOCKER IMAGE
+# DEPLOYMENT (K3s-native)
 #=============================================================================
-echo -e "${BLUE}🐳 Building Redmine Docker image with plugins...${NC}"
+echo -e "${BLUE}🚀 Deploying Redmine (expects image already in registry)...${NC}"
 echo ""
-
-cd docker/redmine
-
-docker build -t redmine-ceres:5.1-plugins .
-
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✅ Docker image built successfully${NC}"
-else
-    echo -e "${RED}❌ Docker build failed${NC}"
-    exit 1
-fi
-
-cd ../..
-
-#=============================================================================
-# IMPORT IMAGE TO K3S
-#=============================================================================
-echo ""
-echo -e "${BLUE}📦 Importing image to K3s...${NC}"
-
-# Save and load image for K3s
-docker save redmine-ceres:5.1-plugins | sudo k3s ctr images import -
-
-echo -e "${GREEN}✅ Image imported to K3s${NC}"
+echo -e "${YELLOW}Tip: Build/push image via CI workflow .github/workflows/redmine-image.yml${NC}"
 
 #=============================================================================
 # CREATE DATABASE
@@ -53,17 +30,20 @@ echo -e "${GREEN}✅ Image imported to K3s${NC}"
 echo ""
 echo -e "${BLUE}🗄️  Creating Redmine database...${NC}"
 
-# Get PostgreSQL pod
-POSTGRES_POD=$(kubectl get pod -n ceres -l app=postgresql -o jsonpath='{.items[0].metadata.name}')
+# Get PostgreSQL pod (namespace may differ)
+POSTGRES_NS_AND_NAME=$(kubectl get pods --all-namespaces -l app=postgresql -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' | head -n 1)
+POSTGRES_NS=$(echo "$POSTGRES_NS_AND_NAME" | awk '{print $1}')
+POSTGRES_POD=$(echo "$POSTGRES_NS_AND_NAME" | awk '{print $2}')
 
-if [ -z "$POSTGRES_POD" ]; then
-    echo -e "${RED}❌ PostgreSQL pod not found${NC}"
-    exit 1
+if [ -z "$POSTGRES_NS" ] || [ -z "$POSTGRES_POD" ]; then
+  echo -e "${RED}❌ PostgreSQL pod not found (label app=postgresql)${NC}"
+  kubectl get pods --all-namespaces | grep -i postgres || true
+  exit 1
 fi
 
 # Create database
-kubectl exec -n ceres $POSTGRES_POD -- psql -U postgres -c "CREATE DATABASE redmine;" 2>/dev/null || echo "Database already exists"
-kubectl exec -n ceres $POSTGRES_POD -- psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE redmine TO postgres;"
+kubectl exec -n "$POSTGRES_NS" "$POSTGRES_POD" -- psql -U postgres -c "CREATE DATABASE redmine;" 2>/dev/null || echo "Database already exists"
+kubectl exec -n "$POSTGRES_NS" "$POSTGRES_POD" -- psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE redmine TO postgres;"
 
 echo -e "${GREEN}✅ Database created${NC}"
 
@@ -73,7 +53,7 @@ echo -e "${GREEN}✅ Database created${NC}"
 echo ""
 echo -e "${BLUE}🚀 Deploying Redmine...${NC}"
 
-kubectl apply -f deployment/redmine.yaml
+./scripts/deploy-redmine.sh
 
 echo -e "${GREEN}✅ Redmine deployed${NC}"
 
@@ -125,13 +105,7 @@ kubectl exec -n redmine $REDMINE_POD -- bundle exec rails runner "
     'task_tracker' => '3',
     'points_burn_direction' => 'down'
   }
-  
-  # Enable Agile
-  Setting.plugin_redmine_agile = {
-    'estimate_units' => 'hours',
-    'default_chart' => 'burndown'
-  }
-  
+
   puts 'Plugins configured'
 " 2>/dev/null || true
 
@@ -156,8 +130,7 @@ kubectl exec -n redmine $REDMINE_POD -- bundle exec rails runner "
     'boards',
     'calendar',
     'gantt',
-    'backlogs',
-    'agile'
+    'backlogs'
   ]
   
   project.save!
@@ -194,19 +167,6 @@ kubectl exec -n redmine $REDMINE_POD -- bundle exec rails runner "
 echo -e "${GREEN}✅ Configuration complete${NC}"
 
 #=============================================================================
-# CONFIGURE THEMES
-#=============================================================================
-echo ""
-echo -e "${BLUE}🎨 Setting default theme...${NC}"
-
-kubectl exec -n redmine $REDMINE_POD -- bundle exec rails runner "
-  Setting.ui_theme = 'PurpleMine2'
-  puts 'Theme set to PurpleMine2'
-" 2>/dev/null || true
-
-echo -e "${GREEN}✅ Theme configured${NC}"
-
-#=============================================================================
 # FINAL SUMMARY
 #=============================================================================
 echo ""
@@ -232,32 +192,20 @@ echo -e "${CYAN}Credentials:${NC}"
 echo "  Username: admin"
 echo "  Password: admin123"
 echo ""
-echo -e "${CYAN}✅ Enabled Plugins (21 total):${NC}"
+echo -e "${CYAN}✅ Enabled Plugins (public set):${NC}"
 echo "  🔥 Redmine Backlogs - Full Scrum (Sprint planning, Burndown charts)"
-echo "  📊 Redmine Agile - Kanban boards"
-echo "  ✅ Checklists"
-echo "  🏷️  Tags"
 echo "  📝 Issue Templates"
 echo "  ✏️  WYSIWYG Editor"
 echo "  📈 Dashboard"
-echo "  💬 Messenger (@mentions)"
 echo "  📋 Clipboard Image Paste"
 echo "  🎨 Theme Changer"
 echo "  💬 Slack/Mattermost integration"
-echo "  🔗 GitHub/GitLab Hook"
-echo "  🔐 LDAP Sync"
-echo "  🔑 SAML (Keycloak SSO)"
+echo "  🔗 GitHub Hook"
 echo "  📐 DrawIO"
 echo "  📖 Wiki Extensions (PlantUML, Mermaid)"
 echo "  📁 DMSF (Document Management)"
 echo "  🖼️  Lightbox2"
-echo "  📊 Workload"
-echo "  ⏱️  Spent Time"
-echo "  📉 Issue Charts"
-echo ""
-echo -e "${CYAN}🎨 Available Themes:${NC}"
-echo "  • PurpleMine2 (default) - Modern responsive"
-echo "  • Circle Theme - Material Design"
+echo "  🤖 Custom Workflows"
 echo "  • Gitmike - GitHub-like"
 echo "  • A1 Theme - Corporate"
 echo ""

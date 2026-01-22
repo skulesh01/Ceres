@@ -1,18 +1,8 @@
 #!/bin/bash
 set -e
 
-# Run plugin migrations on first start
-if [ ! -f /usr/src/redmine/tmp/plugin_migrated ]; then
-    echo "Running plugin migrations..."
-    bundle exec rake redmine:plugins:migrate RAILS_ENV=production
-    touch /usr/src/redmine/tmp/plugin_migrated
-fi
+echo "[DEPRECATED] This wrapper entrypoint is no longer used."
+echo "Use the upstream /docker-entrypoint.sh from redmine:5.1 instead (it handles database.yml, bundler, and migrations)."
+echo "If this script is invoked directly, it will forward to the upstream entrypoint."
 
-# Generate secret token if not exists
-if [ ! -f /usr/src/redmine/config/secrets.yml ]; then
-    echo "Generating secret token..."
-    bundle exec rake generate_secret_token
-fi
-
-# Run original entrypoint
 exec /docker-entrypoint.sh "$@"

@@ -1,0 +1,51 @@
+name: Build & Push Redmine Image
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/redmine/**'
+      - 'VERSION'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ceres-redmine
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          echo "CERES_VERSION=$(cat VERSION | tr -d '\n' | tr -d '\r')" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/redmine
+          file: ./docker/redmine/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:5.1-plugins
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.CERES_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

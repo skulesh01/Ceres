@@ -157,8 +157,8 @@ CERES includes production-ready automation:
 # Apply custom company branding
 ./scripts/apply-branding.sh
 
-# 🚀 Redmine Ultimate Setup (Enterprise Project Management)
-./scripts/setup-redmine.sh              # Build & deploy Redmine with 27 plugins
+# 🚀 Redmine Setup (K3s-native)
+./scripts/setup-redmine.sh               # Deploy Redmine from registry image
 ./scripts/configure-redmine-ultimate.sh  # Full configuration (better than Jira!)
 ```
 
@@ -171,8 +171,8 @@ CERES includes production-ready automation:
 ./scripts/integrate-slack.sh    # Slack alerts
 ./scripts/apply-branding.sh     # Custom branding
 
-# Enterprise Project Management (Better than Jira Enterprise!)
-./scripts/setup-redmine.sh              # Deploy Redmine (5 min)
+# Enterprise Project Management
+./scripts/setup-redmine.sh               # Deploy Redmine (expects CI-built image)
 ./scripts/configure-redmine-ultimate.sh  # Configure everything (10 min)
 ```
 

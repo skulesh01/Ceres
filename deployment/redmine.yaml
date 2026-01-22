@@ -72,8 +72,9 @@ spec:
       
       containers:
       - name: redmine
-        image: redmine-ceres:5.1-plugins
-        imagePullPolicy: IfNotPresent
+        # Built & pushed by CI (see .github/workflows/redmine-image.yml)
+        image: ghcr.io/skulesh01/ceres-redmine:5.1-plugins
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
           name: http
@@ -96,8 +97,7 @@ spec:
               optional: true
         
         # Redmine configuration
-        - name: REDMINE_NO_DB_MIGRATE
-          value: "0"
+        # Ensure DB migrations run (upstream entrypoint runs migrations when REDMINE_NO_DB_MIGRATE is unset)
         - name: REDMINE_PLUGINS_MIGRATE
           value: "true"
         
@@ -159,6 +159,10 @@ spec:
       - name: redmine-config
         configMap:
           name: redmine-config
+
+      # If pulling from a private registry, create imagePullSecret and uncomment:
+      # imagePullSecrets:
+      # - name: redmine-registry
 ---
 # PersistentVolumeClaim for files/attachments
 apiVersion: v1

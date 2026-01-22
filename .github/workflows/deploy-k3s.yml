@@ -1,0 +1,33 @@
+name: Deploy to k3s (optional)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        env:
+          CERES_SSH_HOST: ${{ secrets.CERES_SSH_HOST }}
+          CERES_SSH_USER: ${{ secrets.CERES_SSH_USER }}
+          CERES_SSH_KEY: ${{ secrets.CERES_SSH_KEY }}
+        run: |
+          if [ -z "$CERES_SSH_HOST" ] || [ -z "$CERES_SSH_USER" ] || [ -z "$CERES_SSH_KEY" ]; then
+            echo "Missing secrets: CERES_SSH_HOST, CERES_SSH_USER, CERES_SSH_KEY"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$CERES_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 "$CERES_SSH_USER@$CERES_SSH_HOST" \
+            'cd /root/Ceres && git fetch --all && git reset --hard origin/main && ./scripts/deploy-redmine.sh'
