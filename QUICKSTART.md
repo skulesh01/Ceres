@@ -44,6 +44,25 @@ http://YOUR_SERVER_IP/
 
 ---
 
+## 🆕 Optional: Advanced Setup (v3.2.0)
+
+**Add custom domain + SSL + Branding (10 extra minutes):**
+
+```bash
+# Auto-configure DNS (Cloudflare, Route53, GCP, DigitalOcean)
+./scripts/configure-dns.sh
+
+# Integrate Slack notifications
+./scripts/integrate-slack.sh
+
+# Apply your company branding
+./scripts/apply-branding.sh
+```
+
+**See [Examples Guide](docs/EXAMPLES_v3.2.0.md) for detailed workflows.**
+
+---
+
 ## 📖 Detailed Guide
 
 See [Full QuickStart Guide](QUICKSTART_DETAILED.md) for:
