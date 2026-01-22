@@ -34,6 +34,11 @@ RUN sed -i 's/^\s*gem "holidays".*$/gem "holidays"/g' redmine_backlogs/Gemfile
 # Redmine also declares `nokogiri` (often pinned), so don't redeclare it from the plugin Gemfile.
 RUN sed -i 's/^\s*gem "nokogiri".*$/# gem "nokogiri"/g' redmine_backlogs/Gemfile
 
+# Test-only dependencies from Backlogs frequently pin very old versions.
+# Remove them to avoid conflicts with modern Redmine/Bundler.
+RUN sed -i '/capybara/d' redmine_backlogs/Gemfile
+RUN sed -i '/poltergeist/d' redmine_backlogs/Gemfile
+
 # 2. Issue Templates - Шаблоны задач (Bug, Feature, Support)
 RUN git clone --depth=1 https://github.com/akiko-pusu/redmine_issue_templates.git
 
