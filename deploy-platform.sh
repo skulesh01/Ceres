@@ -192,8 +192,26 @@ else
     echo ""
 fi
 
-# Step 7: Health Check
-echo -e "${YELLOW}🏥 Step 7: Health Check${NC}"
+# Step 7: Services Content Setup
+echo -e "${YELLOW}📦 Step 7: Services Content Setup${NC}"
+echo "-----------------------------------"
+echo "Configuring the inside of services with ready-to-use content..."
+echo ""
+
+if [ "$AUTO_YES" = true ]; then
+    bash scripts/setup-services.sh 2>/dev/null || echo "Services setup will complete in background"
+else
+    read -p "Setup services content (dashboards, projects, buckets, etc.)? [Y/n]: " SETUP_CONTENT
+    if [[ ! "$SETUP_CONTENT" =~ ^[Nn]$ ]]; then
+        bash scripts/setup-services.sh
+    else
+        echo "Skipping services setup (can run later: ./scripts/setup-services.sh)"
+    fi
+fi
+echo ""
+
+# Step 8: Health Check
+echo -e "${YELLOW}🏥 Step 8: Health Check${NC}"
 echo "------------------------"
 sleep 5
 
