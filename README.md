@@ -1,53 +1,162 @@
-# CERES v3.0.0 — Enterprise Kubernetes Platform
+# 🚀 CERES v3.1.0 — "AWS for the Rest of Us"
 
-![CERES](https://img.shields.io/badge/CERES-v3.0.0-blue?style=flat-square)
-![Go](https://img.shields.io/badge/Go-1.21+-blue?style=flat-square)
+![CERES](https://img.shields.io/badge/CERES-v3.1.0-blue?style=flat-square)
+![Deployment](https://img.shields.io/badge/deployment-30min-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Build](https://img.shields.io/badge/build-passing-brightgreen?style=flat-square)
+![Savings](https://img.shields.io/badge/savings-%2425k%2Fyear-gold?style=flat-square)
 
-> **⚠️ ВАЖНО ДЛЯ РАЗРАБОТЧИКОВ**: При каждом коммите обновляй версию! См. [VERSION_GUIDE.md](VERSION_GUIDE.md)
+> **Enterprise infrastructure in 30 minutes. No DevOps team required.**
 
-**CERES** is a production-ready, multi-cloud Kubernetes platform built with:
-- 🏗️ **Terraform** - Infrastructure as Code (AWS/Azure/GCP)
-- 📦 **Kubectl** - Direct cluster management (no Helm dependencies)
-- 🔄 **Flux CD** - GitOps automation
-- 🎯 **Go CLI** - Interactive command-line interface with auto-fix capabilities
+**CERES** is the fastest way to deploy production-ready infrastructure — like AWS, but:
+- ✅ **$100/month** instead of $2,000+/month
+- ✅ **30 minutes** instead of 2-4 weeks
+- ✅ **No DevOps team** required
+- ✅ **Complete control** — your servers, your data
 
-## 🚀 Quick Start
+### 💡 Why CERES?
 
-### One-Command Deploy (No Go Installation Needed!)
+Traditional cloud deployment:
+- Hire DevOps engineer: **$120k/year**
+- AWS services (GitLab CI, monitoring, etc.): **$24k/year**
+- Setup time: **2-4 weeks**
+- **Total first year: ~$27,000**
+
+With CERES:
+- Server rental: **$1,200/year**
+- Setup time: **30 minutes**
+- Maintenance: **automated**
+- **Total first year: ~$1,200** = **$25,800 saved** 💰
+
+---
+
+## 🎯 What You Get
+
+One command deploys:
+- **Authentication** (Keycloak SSO)
+- **Git & CI/CD** (GitLab with runners)
+- **Monitoring** (Grafana + Prometheus + Loki)
+- **Team Chat** (Mattermost)
+- **File Storage** (Nextcloud)
+- **Wiki** (Wiki.js)
+- **Email** (Mailcow optional)
+- **VPN** (WireGuard)
+- **Backups** (Velero, automated daily/weekly)
+- **HTTPS** (cert-manager with Let's Encrypt)
+
+**All services integrated with SSO. Everything works out of the box.**
+
+---
+
+## 🚀 Quick Start (30 Minutes)
+
+### Prerequisites
+- Server with 16GB RAM, 4 CPU cores, 100GB disk
+- Ubuntu 22.04 LTS (or similar Linux)
+- Root access
+
+### Step 1: Install Kubernetes (5 min)
 
 ```bash
-# Linux/macOS
-git clone https://github.com/skulesh01/ceres.git
-cd ceres
-./quick-deploy.sh        # Auto-detects Docker or installs Go
+# K3s (recommended - lightweight)
+curl -sfL https://get.k3s.io | sh -
 
-# Windows
-git clone https://github.com/skulesh01/ceres.git
-cd ceres
-.\quick-deploy.ps1       # Auto-detects Docker or installs Go
+# Verify
+kubectl get nodes
 ```
 
-### Alternative: Docker Build
+### Step 2: Deploy CERES (1 command!)
 
 ```bash
-# Linux/macOS
-./scripts/docker-build.sh
-
-# Windows
-.\scripts\docker-build.ps1
+git clone https://github.com/skulesh01/Ceres.git
+cd Ceres
+chmod +x deploy-platform.sh
+./deploy-platform.sh -y
 ```
 
-### Alternative: Auto-Install Go
+**That's it!** ✨ 
+
+Script will:
+1. ✅ Validate system (RAM, CPU, disk, ports)
+2. ✅ Deploy all services
+3. ✅ Configure SSL/TLS (HTTPS)
+4. ✅ Setup SSO (single sign-on)
+5. ✅ Configure automated backups
+6. ✅ Run health checks
+
+### Step 3: Access Your Platform
+
+Open browser: `http://YOUR_SERVER_IP/`
+
+**Default credentials:**
+- Admin: `admin` / `admin123`
+- Demo user: `demo` / `demo123`
+
+**⚠️ IMPORTANT:** Change passwords after first login!
+
+---
+
+## 📖 Documentation
+
+- **[Quick Start Guide](QUICKSTART.md)** - Get started in 5 minutes
+- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Complete step-by-step instructions
+- **[Architecture](ARCHITECTURE_ANALYSIS.md)** - Technical deep dive
+- **[Troubleshooting](docs/user/TROUBLESHOOTING.md)** - Common issues & solutions
+
+---
+
+## 🛠️ Automation Scripts
+
+CERES includes production-ready automation:
 
 ```bash
-# Linux/macOS
-./scripts/setup-go.sh
+# System validation before deployment
+./scripts/preflight-check.sh
 
-# Windows
-.\scripts\setup-go.ps1
+# Platform health monitoring
+./scripts/health-check.sh
+
+# SSL/TLS setup (Let's Encrypt or self-signed)
+./scripts/configure-ssl.sh
+
+# SSO configuration (auto-create OIDC clients)
+./scripts/configure-sso.sh
+
+# Backup automation (daily + weekly schedules)
+./scripts/configure-backup.sh
+
+# Disaster recovery
+./scripts/rollback.sh
+
+# Update to latest version
+./scripts/update.sh
 ```
+
+---
+
+## 🎯 Who Is This For?
+
+✅ **Startups** (5-50 people) — Get enterprise tools without enterprise costs  
+✅ **Compliance-Required Orgs** — GDPR, HIPAA, etc. Need data on-premise  
+✅ **DevOps Teams** — Testing, staging, development environments  
+✅ **Migrating from SaaS** — Replace GitHub + Slack + Google Workspace  
+
+---
+
+## 💰 Cost Comparison
+
+| Service | Traditional SaaS | CERES (Self-Hosted) |
+|---------|------------------|---------------------|
+| GitLab CI/CD | $99/user/month | $0 (included) |
+| Slack Business | $8/user/month | $0 (Mattermost) |
+| Google Workspace | $12/user/month | $0 (Nextcloud) |
+| Monitoring (Datadog) | $15/host/month | $0 (Grafana) |
+| VPN (Tailscale) | $5/user/month | $0 (WireGuard) |
+| **Total (10 users)** | **$1,390/month** | **~$100/month** |
+| **Annual savings** | — | **~$15,480** 💰 |
+
+---
+
+## 🔧 Advanced Usage
 
 ### Prerequisites
 - **Option 1 (Recommended)**: Docker 20.10+

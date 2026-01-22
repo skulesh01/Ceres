@@ -1,84 +1,130 @@
-# CERES v3.0.0 - Доступ к Сервисам
+# 🌐 CERES v3.1.0 - Access Guide
 
-## 🌐 Прямой Доступ (NodePort)
-
-**16 работающих сервисов доступны напрямую:**
-
-### 📊 Мониторинг и Наблюдение
-
-| Сервис | URL | Логин | Пароль | Описание |
-|--------|-----|-------|---------|----------|
-| **Grafana** | http://192.168.1.3:30300 | admin | Grafana@Admin2025 | Дашборды мониторинга |
-| **Jaeger** | http://192.168.1.3:30686 | - | - | Distributed Tracing |
-| **Uptime Kuma** | http://192.168.1.3:30310 | - | Создать при первом входе | Мониторинг доступности |
-
-### 🔧 DevOps & CI/CD
-
-| Сервис | URL | Логин | Пароль | Описание |
-|--------|-----|-------|---------|----------|
-| **Gogs** | http://192.168.1.3:30701 | - | Создать при первом входе | Git (легче чем GitLab) |
-| **Jenkins** | http://192.168.1.3:30808 | - | Создать при первом входе | CI/CD |
-| **SonarQube** | http://192.168.1.3:30903 | admin | admin | Анализ кода |
-
-### 💬 Collaboration
-
-| Сервис | URL | Логин | Пароль | Описание |
-|--------|-----|-------|---------|----------|
-| **Mattermost** | http://192.168.1.3:30806 | - | Создать при первом входе | Командный чат |
-| **Wiki.js** | http://192.168.1.3:30301 | - | Создать при первом входе | Документация |
-| **Nextcloud** | http://192.168.1.3:30802 | admin | Nextcloud@Admin2025 | Файлы, календарь |
-
-### 🗄️ Storage & Management
-
-| Сервис | URL | Логин | Пароль | Описание |
-|--------|-----|-------|---------|----------|
-| **MinIO Console** | http://192.168.1.3:30901 | minioadmin | MinIO@Admin2025 | S3 Storage |
-| **Portainer** | http://192.168.1.3:30902 | - | Создать при первом входе | Container Management |
-| **Adminer** | http://192.168.1.3:30880 | - | - | Database Management |
-
-### 🔐 Security
-
-| Сервис | URL | Логин | Пароль | Описание |
-|--------|-----|-------|---------|----------|
-| **Vault** | http://192.168.1.3:30820 | Token | root-token-2025 | Secrets Management |
-
-### 💾 Databases (прямое подключение)
-
-| Сервис | Host:Port | Логин | Пароль | Описание |
-|--------|-----------|-------|---------|----------|
-| **PostgreSQL** | 192.168.1.3:5432 | postgres | ceres_postgres_2025 | Основная БД |
-| **Redis** | 192.168.1.3:6379 | - | ceres_redis_2025 | Кэш и очереди |
+**Server IP**: 192.168.1.3  
+**Updated**: January 22, 2026
 
 ---
 
-## 🚀 Быстрые Ссылки
+## 🔑 Default Credentials
 
-### Открыть в Браузере (PowerShell)
+**Keycloak Admin**: admin / admin123
 
-```powershell
-# Мониторинг
-Start-Process "http://192.168.1.3:30300"  # Grafana
-Start-Process "http://192.168.1.3:30686"  # Jaeger
-Start-Process "http://192.168.1.3:30310"  # Uptime Kuma
+---
 
-# DevOps
-Start-Process "http://192.168.1.3:30701"  # Gogs (Git)
-Start-Process "http://192.168.1.3:30808"  # Jenkins
-Start-Process "http://192.168.1.3:30903"  # SonarQube
+## 🚀 Quick Access
 
-# Collaboration
-Start-Process "http://192.168.1.3:30806"  # Mattermost
-Start-Process "http://192.168.1.3:30301"  # Wiki.js
-Start-Process "http://192.168.1.3:30802"  # Nextcloud
+### ✅ Direct IP Access (No Configuration Needed)
+- **Main Portal**: http://192.168.1.3/ (Keycloak SSO)
 
-# Management
-Start-Process "http://192.168.1.3:30901"  # MinIO
-Start-Process "http://192.168.1.3:30902"  # Portainer
-Start-Process "http://192.168.1.3:30880"  # Adminer
-Start-Process "http://192.168.1.3:30820"  # Vault
+### 🏠 Domain Access (Requires hosts file configuration)
+
+**Add to hosts file** (`/etc/hosts` or `C:\Windows\System32\drivers\etc\hosts`):
+```
+192.168.1.3 keycloak.ceres.local gitlab.ceres.local grafana.ceres.local chat.ceres.local files.ceres.local wiki.ceres.local mail.ceres.local portainer.ceres.local minio.ceres.local db.ceres.local prometheus.ceres.local projects.ceres.local vault.ceres.local
 ```
 
-### Подключение к Базам Данных
+---
+
+## 📋 All Services (via Traefik Ingress)
+
+## 📋 All Services (via Traefik Ingress)
+
+### 🔐 Identity & Access
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **Keycloak** | http://keycloak.ceres.local/ | `kubectl port-forward -n ceres svc/keycloak 8080:8080` | SSO & IAM |
+
+### 🗂️ Development & Collaboration  
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **GitLab** | http://gitlab.ceres.local/ | `kubectl port-forward -n gitlab svc/gitlab 8081:80` | Git, CI/CD, Registry |
+| **Mattermost** | http://chat.ceres.local/ | `kubectl port-forward -n mattermost svc/mattermost 8065:8065` | Team Chat |
+| **Redmine** | http://projects.ceres.local/ | `kubectl port-forward -n redmine svc/redmine 3002:3000` | Project Management |
+
+### 📊 Monitoring & Observability
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **Grafana** | http://grafana.ceres.local/ | `kubectl port-forward -n monitoring svc/grafana 3000:3000` | Dashboards |
+| **Prometheus** | http://prometheus.ceres.local/ | `kubectl port-forward -n monitoring svc/prometheus 9090:9090` | Metrics |
+
+### 📁 Storage & Files
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **Nextcloud** | http://files.ceres.local/ | `kubectl port-forward -n nextcloud svc/nextcloud 8082:80` | File Sharing |
+| **MinIO** | http://minio.ceres.local/ | `kubectl port-forward -n minio svc/minio 9001:9001` | S3 Storage |
+
+### 📚 Documentation
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **Wiki.js** | http://wiki.ceres.local/ | `kubectl port-forward -n wiki svc/wikijs 3001:3000` | Knowledge Base |
+
+### 🛠️ Infrastructure
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **Portainer** | http://portainer.ceres.local/ | `kubectl port-forward -n portainer svc/portainer 9443:9443` | Container Management |
+| **Adminer** | http://db.ceres.local/ | `kubectl port-forward -n adminer svc/adminer 8083:8080` | Database UI |
+| **Vault** | http://vault.ceres.local/ | `kubectl port-forward -n vault svc/vault 8200:8200` | Secrets Management |
+
+### 📧 Email
+| Service | Domain URL | Port-Forward | Description |
+|---------|-----------|--------------|-------------|
+| **Mailcow** | http://mail.ceres.local/ | `kubectl port-forward -n mailcow svc/mailcow-webmail 8084:80` | Email Server |
+
+---
+
+## 🎯 Quick Start Commands
+
+### Access Keycloak (Main Portal)
+```bash
+# Direct IP (works immediately)
+http://192.168.1.3/
+
+# With domain (after hosts file update)
+http://keycloak.ceres.local/
+```
+
+### Access Other Services via Port-Forward
+```bash
+# GitLab
+kubectl port-forward -n gitlab svc/gitlab 8081:80 &
+# Open: http://localhost:8081/
+
+# Grafana  
+kubectl port-forward -n monitoring svc/grafana 3000:3000 &
+# Open: http://localhost:3000/
+
+# Nextcloud
+kubectl port-forward -n nextcloud svc/nextcloud 8082:80 &
+# Open: http://localhost:8082/
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### Run Automated Fix
+```bash
+./scripts/fix-ingress.sh
+```
+
+### Check Services Status
+```bash
+kubectl get pods -A | grep Running
+kubectl get ingress -A
+```
+
+---
+
+## 📚 Documentation
+
+- [QUICKSTART.md](QUICKSTART.md) - Quick Start Guide
+- [docs/INGRESS_FIX.md](docs/INGRESS_FIX.md) - Ingress Troubleshooting
+- [CHANGELOG.md](CHANGELOG.md) - Version History
+
+---
+
+**Version**: 3.1.0  
+**Last Updated**: January 22, 2026
 
 **PostgreSQL:**
 ```bash
