@@ -105,13 +105,18 @@ func (v *VPNManager) install() error {
 
 // getServerPublicKey retrieves server public key via SSH
 func (v *VPNManager) getServerPublicKey() (string, error) {
-	cmd := exec.Command("ssh", fmt.Sprintf("root@%s", v.serverIP),
-		"cat", "/etc/wireguard/publickey")
+	cmd := exec.Command("ssh", fmt.Sprintf("root@%s", v.serverIP), "wg", "show", "wg0")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(output)), nil
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "public key:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "public key:")), nil
+		}
+	}
+	return "", fmt.Errorf("server public key not found")
 }
 
 // generateClientKeys generates WireGuard keys for client

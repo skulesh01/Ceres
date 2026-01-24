@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/skulesh01/ceres/pkg/backup"
@@ -10,6 +11,7 @@ import (
 	"github.com/skulesh01/ceres/pkg/mail"
 	"github.com/skulesh01/ceres/pkg/onboarding"
 	"github.com/skulesh01/ceres/pkg/sso"
+	"github.com/skulesh01/ceres/pkg/tls"
 	"github.com/skulesh01/ceres/pkg/vpn"
 	"github.com/spf13/cobra"
 )
@@ -650,6 +652,72 @@ func newMailCmd() *cobra.Command {
 		Use:   "mail",
 		Short: "Управление почтовым сервером",
 	}
+
+	var (
+		toEmails      []string
+		vpnEndpoint   string
+		vpnPort       int
+		vpnClientIP   string
+		vpnFilename   string
+		subject       string
+		body          string
+	)
+
+	sendOnboardingCmd := &cobra.Command{
+		Use:   "send-onboarding",
+		Short: "Отправить пользователю Root CA сертификат и WireGuard конфиг",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			toEmails = splitAndTrim(toEmails)
+			if len(toEmails) != 1 {
+				return fmt.Errorf("ровно один получатель обязателен: используйте --to user@domain")
+			}
+			if strings.TrimSpace(vpnEndpoint) == "" {
+				return fmt.Errorf("--vpn-endpoint обязателен (например 192.168.1.3 или vpn.company.ru)")
+			}
+			if vpnPort == 0 {
+				vpnPort = 51820
+			}
+
+			// Export CERES Root CA from cluster
+			ca, err := tls.ReadPEMFromKubernetesTLSSecret("cert-manager", "ceres-root-ca")
+			if err != nil {
+				return err
+			}
+
+			// Generate WireGuard client config and register peer on server
+			cfg, err := vpn.CreateClientConfig(vpnEndpoint, vpnPort, vpnClientIP)
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(vpnFilename) == "" {
+				vpnFilename = "ceres-vpn.conf"
+			}
+
+			if strings.TrimSpace(subject) == "" {
+				subject = "CERES: VPN + сертификат"
+			}
+			if strings.TrimSpace(body) == "" {
+				body = "Здравствуйте!\n\nВо вложении:\n1) CERES Root CA сертификат (установить в доверенные корневые)\n2) WireGuard конфигурация (импортировать в приложение WireGuard)\n\nЕсли браузер ругается на HTTPS — установите Root CA, и предупреждения исчезнут.\n"
+			}
+
+			mailMgr := mail.NewManager()
+			atts := []mail.Attachment{
+				{Filename: "ceres-root-ca.crt", ContentType: "application/x-x509-ca-cert", Data: ca},
+				{Filename: filepath.Base(vpnFilename), ContentType: "text/plain", Data: cfg},
+			}
+			return mailMgr.SendEmail(toEmails, subject, body, atts)
+		},
+	}
+
+	sendOnboardingCmd.Flags().StringSliceVar(&toEmails, "to", nil, "Получатель (ровно один). Можно повторять флаг")
+	sendOnboardingCmd.Flags().StringVar(&vpnEndpoint, "vpn-endpoint", os.Getenv("CERES_VPN_ENDPOINT"), "VPN endpoint host/IP")
+	sendOnboardingCmd.Flags().IntVar(&vpnPort, "vpn-port", 51820, "VPN endpoint port")
+	sendOnboardingCmd.Flags().StringVar(&vpnClientIP, "vpn-client-ip", "", "Client VPN IP (по умолчанию выберется следующий свободный)")
+	sendOnboardingCmd.Flags().StringVar(&vpnFilename, "vpn-filename", "", "Имя вложения для VPN конфига")
+	sendOnboardingCmd.Flags().StringVar(&subject, "subject", "", "Тема письма")
+	sendOnboardingCmd.Flags().StringVar(&body, "body", "", "Текст письма")
+
+	cmd.AddCommand(sendOnboardingCmd)
 	
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
@@ -671,6 +739,23 @@ func newMailCmd() *cobra.Command {
 	})
 	
 	return cmd
+}
+
+func splitAndTrim(values []string) []string {
+	var out []string
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // newSSOCmd команды SSO
