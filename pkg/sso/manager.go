@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -13,6 +14,49 @@ type Manager struct{}
 
 func NewManager() *Manager {
 	return &Manager{}
+}
+
+func (m *Manager) ceresPath(p string) string {
+	if p == "" {
+		return p
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+
+	candidates := []string{}
+	if v := strings.TrimSpace(os.Getenv("CERES_ROOT")); v != "" {
+		candidates = append(candidates, v)
+	}
+	if v := strings.TrimSpace(os.Getenv("CERES_REPO_ROOT")); v != "" {
+		candidates = append(candidates, v)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, cwd)
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates, exeDir, filepath.Dir(exeDir))
+	}
+
+	for _, base := range candidates {
+		candidate := filepath.Join(base, p)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return p
+}
+
+func (m *Manager) keycloakAdminPassword() string {
+	if v := strings.TrimSpace(os.Getenv("CERES_KEYCLOAK_ADMIN_PASSWORD")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("KEYCLOAK_ADMIN_PASSWORD")); v != "" {
+		return v
+	}
+	// Default from deployment/keycloak.yaml (ceres/keycloak-secret:admin-password)
+	return "K3yClo@k!2025"
 }
 
 // Install deploys Keycloak realm and OAuth2 Proxy
@@ -33,14 +77,14 @@ func (m *Manager) Install() error {
 
 	// 3. Deploy OAuth2 Proxy
 	fmt.Println("🔐 Deploying OAuth2 Proxy...")
-	cmd := exec.Command("kubectl", "apply", "-f", "/root/Ceres/deployment/oauth2-proxy.yaml")
+	cmd := exec.Command("kubectl", "apply", "-f", m.ceresPath("deployment/oauth2-proxy.yaml"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to deploy oauth2-proxy: %w\n%s", err, output)
 	}
 
 	// 4. Apply domain-based Ingress routes
 	fmt.Println("🌐 Applying domain-based Ingress routes...")
-	cmd = exec.Command("kubectl", "apply", "-f", "/root/Ceres/deployment/ingress-domains.yaml")
+	cmd = exec.Command("kubectl", "apply", "-f", m.ceresPath("deployment/ingress-domains.yaml"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to apply ingress routes: %w\n%s", err, output)
 	}
@@ -61,7 +105,7 @@ func (m *Manager) Install() error {
 	fmt.Println("\n🌐 Access URLs:")
 	fmt.Println("   Keycloak Admin: https://keycloak.ceres.local")
 	fmt.Println("   Username: admin")
-	fmt.Println("   Password: K3yClo@k!2025")
+	fmt.Println("   Password: (from secret ceres/keycloak-secret)")
 	fmt.Println("\n💡 Add to /etc/hosts:")
 	fmt.Println("   192.168.1.3 keycloak.ceres.local gitlab.ceres.local grafana.ceres.local")
 	fmt.Println("   192.168.1.3 chat.ceres.local files.ceres.local wiki.ceres.local")
@@ -100,7 +144,7 @@ func (m *Manager) importRealm() error {
 
 	// Copy realm file
 	cmd := exec.Command("kubectl", "cp",
-		"/root/Ceres/config/keycloak-realm.json",
+		m.ceresPath("config/keycloak-realm.json"),
 		fmt.Sprintf("ceres/%s:/tmp/realm.json", podName))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to copy realm file: %w\n%s", err, output)
@@ -133,7 +177,7 @@ func (m *Manager) importRealmViaAPI() error {
 	}
 
 	// Read realm file
-	realmData, err := os.ReadFile("/root/Ceres/config/keycloak-realm.json")
+	realmData, err := os.ReadFile(m.ceresPath("config/keycloak-realm.json"))
 	if err != nil {
 		return fmt.Errorf("failed to read realm file: %w", err)
 	}
@@ -167,12 +211,13 @@ func (m *Manager) getAdminToken() (string, error) {
 		return "", err
 	}
 
-	curlCmd := `curl -X POST http://localhost:8080/realms/master/protocol/openid-connect/token \
+	adminPassword := m.keycloakAdminPassword()
+	curlCmd := fmt.Sprintf(`curl -X POST http://localhost:8080/realms/master/protocol/openid-connect/token \
 		-H "Content-Type: application/x-www-form-urlencoded" \
 		-d "username=admin" \
-		-d "password=K3yClo@k!2025" \
+		-d "password=%s" \
 		-d "grant_type=password" \
-		-d "client_id=admin-cli" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4`
+		-d "client_id=admin-cli" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4`, adminPassword)
 
 	cmd := exec.Command("kubectl", "exec", "-n", "ceres", podName, "--",
 		"bash", "-c", curlCmd)

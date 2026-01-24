@@ -3,3 +3,5 @@ kind: Kustomization
 
 resources:
   - redmine.yaml
+  - proxmox-notes-updater.yaml
+  - wikijs-nodeport.yaml

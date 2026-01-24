@@ -96,30 +96,72 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "500m"
-      # SOGo (Webmail UI)
-      - name: sogo
-        image: mailcow/sogo:1.70
-        ports:
-        - containerPort: 20000
-          name: http
-        env:
-        - name: SOGO_OIDC_ENABLED
-          value: "false"  # Будет настроено позже
-        volumeMounts:
-        - name: mailcow-data
-          mountPath: /var/lib/sogo
-          subPath: sogo
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "200m"
       volumes:
       - name: mailcow-data
         persistentVolumeClaim:
           claimName: mailcow-data
+
+---
+# Roundcube Webmail (lightweight web UI for IMAP/SMTP)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: roundcube-db
+  namespace: mailcow
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roundcube
+  namespace: mailcow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: roundcube
+  template:
+    metadata:
+      labels:
+        app: roundcube
+    spec:
+      containers:
+      - name: roundcube
+        image: roundcube/roundcubemail:latest
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: ROUNDCUBEMAIL_DEFAULT_HOST
+          value: mailcow-imap
+        - name: ROUNDCUBEMAIL_DEFAULT_PORT
+          value: "143"
+        - name: ROUNDCUBEMAIL_SMTP_SERVER
+          value: mailcow-smtp
+        - name: ROUNDCUBEMAIL_SMTP_PORT
+          value: "587"
+        - name: ROUNDCUBEMAIL_USERNAME_DOMAIN
+          value: "ceres.local"
+        volumeMounts:
+        - name: roundcube-db
+          mountPath: /var/roundcube/db
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+      volumes:
+      - name: roundcube-db
+        persistentVolumeClaim:
+          claimName: roundcube-db
 ---
 # SMTP Service (для использования другими сервисами)
 apiVersion: v1
@@ -167,35 +209,9 @@ metadata:
   namespace: mailcow
 spec:
   selector:
-    app: mailcow
+    app: roundcube
   ports:
   - name: http
     port: 80
-    targetPort: 20000
+    targetPort: 80
   type: ClusterIP
----
-# Ingress для Webmail
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: mailcow-webmail
-  namespace: mailcow
-  annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - mail.ceres.local
-    secretName: mailcow-tls
-  rules:
-  - host: mail.ceres.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: mailcow-webmail
-            port:
-              number: 80

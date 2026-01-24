@@ -7,7 +7,12 @@
 
 ## 🔑 Default Credentials
 
-**Keycloak Admin**: admin / admin123
+**Keycloak Admin**: admin / (from Kubernetes Secret)
+
+```bash
+kubectl get secret -n ceres keycloak-secret \
+	-o jsonpath='{.data.admin-password}' | base64 -d
+```
 
 ---
 

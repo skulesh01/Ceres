@@ -19,9 +19,12 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 
 # Configuration
-KEYCLOAK_URL="http://keycloak.ceres.local"
+KEYCLOAK_URL="http://localhost:8080"
 KEYCLOAK_ADMIN="admin"
-KEYCLOAK_PASSWORD="admin123"
+KEYCLOAK_PASSWORD="$(kubectl get secret -n ceres keycloak-secret -o jsonpath='{.data.admin-password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+if [ -z "$KEYCLOAK_PASSWORD" ]; then
+  KEYCLOAK_PASSWORD="admin123"
+fi
 REALM_NAME="ceres"
 
 # Wait for Keycloak

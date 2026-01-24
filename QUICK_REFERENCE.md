@@ -59,18 +59,22 @@ curl -k https://YOUR_DOMAIN
 
 # Access Keycloak admin
 http://keycloak.ceres.local/admin
-# Login: admin / admin123
+# Login: admin / (from secret)
+
+kubectl get secret -n ceres keycloak-secret \
+  -o jsonpath='{.data.admin-password}' | base64 -d
+
+export CERES_KEYCLOAK_ADMIN_PASSWORD=$(kubectl get secret -n ceres keycloak-secret \
+  -o jsonpath='{.data.admin-password}' | base64 -d)
 
 # Get client secret
 kubectl exec -n ceres deployment/keycloak -- \
   /opt/keycloak/bin/kcadm.sh get clients -r ceres --fields id,clientId
 
 # Create user
-kubectl exec -n ceres deployment/keycloak -- \
-  /opt/keycloak/bin/kcadm.sh create users -r ceres \
-  -s username=newuser \
-  -s email=user@example.com \
-  -s enabled=true
+ceres onboarding create-user \
+  --username newuser \
+  --email user@example.com
 ```
 
 ---

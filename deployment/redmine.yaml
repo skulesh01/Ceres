@@ -40,12 +40,14 @@ data:
     # Redmine Backlogs configuration
     config.after_initialize do
       # Enable Backlogs for all projects
-      Setting.plugin_redmine_backlogs = {
-        'story_trackers' => ['Feature', 'User Story'],
-        'task_tracker' => 'Task',
-        'points_burn_direction' => 'down',
-        'wiki_template' => ''
-      }
+      if defined?(Setting) && Setting.respond_to?(:plugin_redmine_backlogs=)
+        Setting.plugin_redmine_backlogs = {
+          'story_trackers' => ['Feature', 'User Story'],
+          'task_tracker' => 'Task',
+          'points_burn_direction' => 'down',
+          'wiki_template' => ''
+        }
+      end
     end
 ---
 # Deployment
@@ -67,8 +69,8 @@ spec:
       initContainers:
       # Initialize a writable config dir (avoid ConfigMap read-only mounts under /usr/src/redmine/config)
       - name: init-config
-        image: ghcr.io/skulesh01/ceres-redmine:5.1-plugins
-        imagePullPolicy: Always
+        image: redmine:5.1
+        imagePullPolicy: IfNotPresent
         command:
           - sh
           - -c
@@ -91,8 +93,8 @@ spec:
       containers:
       - name: redmine
         # Built & pushed by CI (see .github/workflows/redmine-image.yml)
-        image: ghcr.io/skulesh01/ceres-redmine:5.1-plugins
-        imagePullPolicy: Always
+        image: redmine:5.1
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
           name: http
@@ -112,7 +114,7 @@ spec:
             secretKeyRef:
               name: ceres-credentials
               key: postgres-password
-              optional: true
+              optional: false
         
         # Redmine configuration
         # Ensure DB migrations run (upstream entrypoint runs migrations when REDMINE_NO_DB_MIGRATE is unset)

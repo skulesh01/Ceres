@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -212,7 +213,7 @@ func (d *Deployer) freshInstall() error {
 	}
 
 	fmt.Println("\n📦 Step 2: Initialize State")
-	if err := d.applyManifest("/root/Ceres/deployment/promtail.yaml"); err != nil {
+	if err := d.applyManifest("deployment/promtail.yaml"); err != nil {
 		return err
 	}
 
@@ -233,7 +234,7 @@ func (d *Deployer) freshInstall() error {
 	d.waitForPods("ingress-nginx", "app.kubernetes.io/component=controller", 120)
 
 	fmt.Println("\n📦 Step 6: Identity (Keycloak)")
-	if err := d.applyManifest("/root/Ceres/deployment/mailcow.yaml"); err != nil {
+	if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {
 		return err
 	}
 	d.waitForPods("ceres", "app=keycloak", 180)
@@ -314,10 +315,46 @@ func (d *Deployer) upgrade(oldVersion string) error {
 
 // applyManifest applies a Kubernetes manifest
 func (d *Deployer) applyManifest(path string) error {
-	cmd := exec.Command("kubectl", "apply", "-f", path)
+	resolved := d.resolveCeresPath(path)
+	cmd := exec.Command("kubectl", "apply", "-f", resolved)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func (d *Deployer) resolveCeresPath(p string) string {
+	if p == "" {
+		return p
+	}
+	// Absolute path or URL: do not touch.
+	if filepath.IsAbs(p) || strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+		return p
+	}
+
+	candidates := []string{}
+	if v := strings.TrimSpace(os.Getenv("CERES_ROOT")); v != "" {
+		candidates = append(candidates, v)
+	}
+	if v := strings.TrimSpace(os.Getenv("CERES_REPO_ROOT")); v != "" {
+		candidates = append(candidates, v)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, cwd)
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates, exeDir, filepath.Dir(exeDir))
+	}
+
+	for _, base := range candidates {
+		candidate := filepath.Join(base, p)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	// Fallback: relative path.
+	return p
 }
 
 // waitForPods waits for pods to be ready
@@ -676,7 +713,7 @@ func (d *Deployer) SetupTLS() error {
 
 	// Apply ClusterIssuers
 	time.Sleep(10 * time.Second)
-	d.applyManifest("/root/Ceres/deployment/cert-manager.yaml")
+	d.applyManifest("deployment/cert-manager.yaml")
 
 	fmt.Println("✅ Cert-Manager установлен")
 	fmt.Println("🔐 ClusterIssuers: selfsigned, letsencrypt-prod")
@@ -709,7 +746,7 @@ func (d *Deployer) SetupBackup() error {
 
 	if err := cmd.Run(); err != nil {
 		fmt.Println("⚠️  Helm установка не удалась, применяю YAML...")
-		if err := d.applyManifest("/root/Ceres/deployment/velero.yaml"); err != nil {
+		if err := d.applyManifest("deployment/velero.yaml"); err != nil {
 			return err
 		}
 	}
@@ -727,7 +764,7 @@ func (d *Deployer) SetupBackup() error {
 func (d *Deployer) SetupLogging() error {
 	fmt.Println("📊 Установка Promtail...")
 
-	if err := d.applyManifest("/root/Ceres/deployment/promtail.yaml"); err != nil {
+	if err := d.applyManifest("deployment/promtail.yaml"); err != nil {
 		return err
 	}
 
@@ -742,7 +779,7 @@ func (d *Deployer) SetupLogging() error {
 func (d *Deployer) SetupMail() error {
 	fmt.Println("📧 Установка Mailcow...")
 
-	if err := d.applyManifest("/root/Ceres/deployment/mailcow.yaml"); err != nil {
+	if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {
 		return err
 	}
 
@@ -767,7 +804,7 @@ func (d *Deployer) FixKeycloak() error {
 	}
 
 	// Reapply fixed manifest
-	if err := d.applyManifest("/root/Ceres/deployment/keycloak.yaml"); err != nil {
+	if err := d.applyManifest("deployment/keycloak.yaml"); err != nil {
 		return fmt.Errorf("failed to apply keycloak manifest: %w", err)
 	}
 

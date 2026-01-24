@@ -66,9 +66,8 @@ metadata:
   namespace: monitoring
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - grafana.ceres.local
@@ -94,10 +93,8 @@ metadata:
   namespace: mattermost
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - chat.ceres.local
@@ -123,10 +120,8 @@ metadata:
   namespace: nextcloud
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10G"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - files.ceres.local
@@ -152,9 +147,8 @@ metadata:
   namespace: wiki
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - wiki.ceres.local
@@ -180,9 +174,8 @@ metadata:
   namespace: mailcow
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - mail.ceres.local
@@ -208,10 +201,9 @@ metadata:
   namespace: portainer
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - portainer.ceres.local
@@ -237,9 +229,8 @@ metadata:
   namespace: minio
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - minio.ceres.local
@@ -265,9 +256,8 @@ metadata:
   namespace: adminer
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - db.ceres.local
@@ -293,9 +283,8 @@ metadata:
   namespace: monitoring
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - prometheus.ceres.local
@@ -321,9 +310,8 @@ metadata:
   namespace: redmine
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - projects.ceres.local
@@ -349,10 +337,9 @@ metadata:
   namespace: vault
   annotations:
     cert-manager.io/cluster-issuer: "selfsigned-issuer"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   tls:
   - hosts:
     - vault.ceres.local

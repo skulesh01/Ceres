@@ -1,0 +1,97 @@
+FROM redmine:5.1
+
+# Установка зависимостей
+RUN apt-get update && apt-get install -y \
+    git \
+    vim \
+    libpq-dev \
+    imagemagick \
+    ghostscript \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# CORE AGILE/SCRUM PLUGINS (FREE & OPEN SOURCE)
+# ============================================
+
+WORKDIR /usr/src/redmine/plugins
+
+# 1. Redmine Backlogs - FULL Scrum (Sprint planning, Burndown charts, Story points)
+RUN git clone --depth=1 https://github.com/backlogs/redmine_backlogs.git
+
+# 2. Issue Templates - Шаблоны задач (Bug, Feature, Support)
+RUN git clone --depth=1 https://github.com/akiko-pusu/redmine_issue_templates.git
+
+# 3. WYSIWYG Editor - Визуальный редактор вместо Textile
+RUN git clone --depth=1 https://github.com/taqueci/redmine_wysiwyg_editor.git
+
+# 4. Dashboard - Дашборд с виджетами
+RUN git clone --depth=1 https://github.com/jgraichen/redmine_dashboard.git
+
+# 5. Clipboard Image Paste - Вставка скриншотов
+RUN git clone --depth=1 https://github.com/peclik/clipboard_image_paste.git
+
+# 6. Theme Changer - Переключение тем для пользователей
+RUN git clone --depth=1 https://github.com/haru/redmine_theme_changer.git
+
+# ============================================
+# INTEGRATIONS
+# ============================================
+
+# 7. Slack/Mattermost - Webhooks уведомления
+RUN git clone --depth=1 https://github.com/sciyoshi/redmine-slack.git redmine_slack
+
+# 8. GitHub Hook - Webhooks от Git
+RUN git clone --depth=1 https://github.com/koppen/redmine_github_hook.git
+
+# ============================================
+# PROJECT MANAGEMENT ENHANCEMENTS
+# ============================================
+
+# 9. DrawIO - Диаграммы в Wiki
+RUN git clone --depth=1 https://github.com/mikitex70/redmine_drawio.git
+
+# 10. Wiki Extensions - PlantUML, Mermaid
+RUN git clone --depth=1 https://github.com/haru/redmine_wiki_extensions.git
+
+# 11. DMSF - Document Management System
+RUN git clone --depth=1 https://github.com/danmunn/redmine_dmsf.git
+
+# 12. Lightbox2 - Превью изображений/PDF
+RUN git clone --depth=1 https://github.com/paginagmbh/redmine_lightbox2.git
+
+# 13. Custom Workflows - Расширенная автоматизация
+RUN git clone --depth=1 https://github.com/anteo/redmine_custom_workflows.git
+
+# ============================================
+# THEMES
+# ============================================
+
+WORKDIR /usr/src/redmine/public/themes
+
+# PurpleMine2 - Современная responsive тема
+RUN git clone --depth=1 https://github.com/mrliptontea/PurpleMine2.git
+
+# Circle Theme - Material Design
+RUN git clone --depth=1 https://github.com/kodeka/circle-theme.git
+
+# ============================================
+# FINAL SETUP
+# ============================================
+
+WORKDIR /usr/src/redmine
+
+# Создаем Gemfile.local для плагинов
+RUN echo 'gem "holidays"' > Gemfile.local && \
+    echo 'gem "icalendar"' >> Gemfile.local && \
+    echo 'gem "rubyzip"' >> Gemfile.local
+
+# Права на plugins
+RUN chmod -R 755 plugins/
+
+# Entrypoint для авто-миграций
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["rails", "server", "-b", "0.0.0.0"]

@@ -1,0 +1,343 @@
+# Optional: Proxmox Notes auto-updater (GitOps)
+#
+# What it does:
+# - Lists k8s Ingress + NodePort services
+# - Generates a Markdown inventory
+# - Updates Proxmox VM/CT "Notes/Description" via Proxmox API
+#
+# Safe defaults:
+# - CronJob is SUSPENDED by default
+# - Secret contains placeholders (fill in via kubectl/SealedSecret/ExternalSecrets)
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ceres-management
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: proxmox-notes-updater
+  namespace: ceres-management
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: proxmox-notes-updater
+rules:
+  - apiGroups: [""]
+    resources: ["services", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: proxmox-notes-updater
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: proxmox-notes-updater
+subjects:
+  - kind: ServiceAccount
+    name: proxmox-notes-updater
+    namespace: ceres-management
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: proxmox-notes-updater
+  namespace: ceres-management
+type: Opaque
+stringData:
+  # Proxmox connection
+  proxmox_host: "192.168.1.3"
+  proxmox_port: "8006"
+  proxmox_node: "pve"
+
+  # Target object in Proxmox
+  target_type: "node"   # node | qemu | lxc
+  target_vmid: ""       # required only for qemu/lxc
+
+  # Recommended auth: API Token
+  api_token_id: "root@pam!ceres-notes"        # change
+  api_token_secret: "CHANGE_ME"              # change
+
+  # If your Proxmox uses a self-signed cert
+  tls_insecure: "true"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxmox-notes-updater
+  namespace: ceres-management
+data:
+  update_notes.py: |
+    import json
+    import os
+    import ssl
+    import sys
+    import urllib.parse
+    import urllib.request
+
+
+    def env(name: str, default: str | None = None) -> str:
+        val = os.environ.get(name)
+        if val is None or val == "":
+            if default is None:
+                raise RuntimeError(f"Missing env var: {name}")
+            return default
+        return val
+
+
+    def k8s_api_get(path: str) -> dict:
+        host = "https://kubernetes.default.svc"
+        token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+        with open(token_path, "r", encoding="utf-8") as f:
+            token = f.read().strip()
+
+        ctx = ssl.create_default_context(cafile=ca_path)
+        req = urllib.request.Request(
+            host + path,
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+
+    def proxmox_request(method: str, url: str, headers: dict, data: bytes | None = None) -> dict:
+        insecure = env("PVE_TLS_INSECURE", "false").lower() in ("1", "true", "yes")
+        ctx = ssl.create_default_context()
+        if insecure:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+
+
+    def build_markdown(ingresses: dict, services: dict, nodes: dict) -> str:
+        lines: list[str] = []
+        lines.append("# CERES - Service Access (auto-generated)")
+        lines.append("")
+        lines.append("Generated: " + __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        lines.append("")
+
+        node_ips: list[str] = []
+        for n in nodes.get("items", []):
+            for addr in n.get("status", {}).get("addresses", []) or []:
+                if addr.get("type") == "InternalIP":
+                    node_ips.append(addr.get("address"))
+        node_ips = sorted(set([ip for ip in node_ips if ip]))
+
+        lb_ip = None
+        for s in services.get("items", []):
+            if s.get("metadata", {}).get("namespace") == "kube-system" and s.get("metadata", {}).get("name") == "traefik":
+                ing = (((s.get("status") or {}).get("loadBalancer") or {}).get("ingress") or [])
+                if ing and isinstance(ing, list):
+                    lb_ip = ing[0].get("ip")
+                break
+
+        lines.append("## Entry point")
+        if lb_ip:
+            lines.append(f"- Traefik LoadBalancer IP: {lb_ip}")
+        for ip in node_ips:
+            lines.append(f"- k3s node InternalIP: {ip}")
+        lines.append("")
+
+        lines.append("## Ingress (recommended)")
+        ingress_rows: list[tuple[str, str, str]] = []
+        for ing in ingresses.get("items", []):
+            ns = ing.get("metadata", {}).get("namespace")
+            name = ing.get("metadata", {}).get("name")
+            for rule in (ing.get("spec", {}).get("rules") or []):
+                host = rule.get("host")
+                if host:
+                    ingress_rows.append((host, ns, name))
+        ingress_rows = sorted(set(ingress_rows), key=lambda x: x[0])
+        if not ingress_rows:
+            lines.append("(no ingress found)")
+        else:
+            for host, ns, name in ingress_rows:
+                lines.append(f"- https://{host}/  (ns={ns}, ingress={name})")
+        lines.append("")
+
+        lines.append("## NodePort (fallback)")
+        prefer_ip = lb_ip or (node_ips[0] if node_ips else "<NODE_IP>")
+        nodeport_rows: list[tuple[str, str, int, int, str]] = []
+        for svc in services.get("items", []):
+            spec = svc.get("spec", {})
+            if spec.get("type") != "NodePort":
+                continue
+            ns = svc.get("metadata", {}).get("namespace")
+            name = svc.get("metadata", {}).get("name")
+            for p in (spec.get("ports") or []):
+                node_port = p.get("nodePort")
+                port = p.get("port")
+                proto = p.get("protocol")
+                if node_port:
+                    nodeport_rows.append((ns, name, int(node_port), int(port or 0), proto or "TCP"))
+        nodeport_rows = sorted(set(nodeport_rows), key=lambda x: (x[0], x[1], x[2]))
+        if not nodeport_rows:
+            lines.append("(no NodePort services found)")
+        else:
+            for ns, name, node_port, port, proto in nodeport_rows:
+                lines.append(f"- {ns}/{name}: http://{prefer_ip}:{node_port}/ (svcPort={port}/{proto})")
+        lines.append("")
+
+        lines.append("## Credentials (where to find)")
+        lines.append("Don't paste passwords here; reference Kubernetes secrets:")
+        lines.append("- argocd/argocd-initial-admin-secret")
+        lines.append("- ceres-core/postgresql-secret")
+        lines.append("- ceres-core/redis-secret")
+        lines.append("- redmine/ceres-credentials")
+
+        return "\n".join(lines)
+
+
+    def merge_description(existing: str | None, payload: str) -> str:
+        begin = "<!-- CERES-AUTO-NOTES:BEGIN -->"
+        end = "<!-- CERES-AUTO-NOTES:END -->"
+        block = f"{begin}\n{payload}\n{end}"
+        if not existing:
+            return block
+        import re
+        pattern = re.escape(begin) + r".*?" + re.escape(end)
+        if re.search(pattern, existing, flags=re.S):
+            return re.sub(pattern, block, existing, flags=re.S)
+        return existing.rstrip() + "\n\n" + block
+
+
+    def main() -> int:
+        pve_host = env("PVE_HOST")
+        pve_port = env("PVE_PORT", "8006")
+        pve_node = env("PVE_NODE", "pve")
+        target_type = env("PVE_TARGET_TYPE", "node")
+        target_vmid = os.environ.get("PVE_TARGET_VMID", "")
+        token_id = env("PVE_TOKEN_ID")
+        token_secret = env("PVE_TOKEN_SECRET")
+
+        if token_secret == "CHANGE_ME":
+            raise RuntimeError("PVE_TOKEN_SECRET is still CHANGE_ME. Update the ceres-management/proxmox-notes-updater secret.")
+
+        ing = k8s_api_get("/apis/networking.k8s.io/v1/ingresses")
+        svc = k8s_api_get("/api/v1/services")
+        nodes = k8s_api_get("/api/v1/nodes")
+
+        md = build_markdown(ing, svc, nodes)
+
+        base = f"https://{pve_host}:{pve_port}/api2/json"
+        if target_type == "node":
+          cfg_path = f"/nodes/{pve_node}/config"
+        else:
+          if not target_vmid:
+            raise RuntimeError("PVE_TARGET_VMID is required for qemu/lxc")
+          cfg_path = f"/nodes/{pve_node}/{target_type}/{target_vmid}/config"
+        headers = {
+            "Authorization": f"PVEAPIToken={token_id}={token_secret}",
+            "Accept": "application/json",
+        }
+
+        current = proxmox_request("GET", base + cfg_path, headers)
+        existing = (current.get("data") or {}).get("description")
+        new_desc = merge_description(existing, md)
+
+        body = urllib.parse.urlencode({"description": new_desc}).encode("utf-8")
+        upd_headers = dict(headers)
+        upd_headers["Content-Type"] = "application/x-www-form-urlencoded"
+        proxmox_request("PUT", base + cfg_path, upd_headers, data=body)
+
+        print(f"Updated Proxmox description for {target_type}/{target_vmid} on node {pve_node}")
+        return 0
+
+
+    if __name__ == "__main__":
+        try:
+            raise SystemExit(main())
+        except Exception as e:
+            print("ERROR:", e, file=sys.stderr)
+            raise
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: proxmox-notes-updater
+  namespace: ceres-management
+spec:
+  schedule: "*/10 * * * *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: proxmox-notes-updater
+          restartPolicy: OnFailure
+          containers:
+            - name: updater
+              image: python:3.12-alpine
+              command: ["python", "/app/update_notes.py"]
+              env:
+                - name: PVE_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: proxmox_host
+                - name: PVE_PORT
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: proxmox_port
+                - name: PVE_NODE
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: proxmox_node
+                - name: PVE_TARGET_TYPE
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: target_type
+                - name: PVE_TARGET_VMID
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: target_vmid
+                - name: PVE_TOKEN_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: api_token_id
+                - name: PVE_TOKEN_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: api_token_secret
+                - name: PVE_TLS_INSECURE
+                  valueFrom:
+                    secretKeyRef:
+                      name: proxmox-notes-updater
+                      key: tls_insecure
+              volumeMounts:
+                - name: app
+                  mountPath: /app
+          volumes:
+            - name: app
+              configMap:
+                name: proxmox-notes-updater
+                defaultMode: 0555

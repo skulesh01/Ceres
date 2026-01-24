@@ -6,6 +6,7 @@ import (
 
 	"github.com/skulesh01/ceres/pkg/backup"
 	"github.com/skulesh01/ceres/pkg/deployment"
+	"github.com/skulesh01/ceres/pkg/onboarding"
 	"github.com/skulesh01/ceres/pkg/mail"
 	"github.com/skulesh01/ceres/pkg/sso"
 	"github.com/skulesh01/ceres/pkg/vpn"
@@ -47,6 +48,7 @@ Features: Cert-Manager, Velero, Promtail, Mailcow, Keycloak SSO`,
 	rootCmd.AddCommand(newMailCmd())           // НОВОЕ
 	rootCmd.AddCommand(newSSOCmd())            // НОВОЕ
 	rootCmd.AddCommand(newHealthCmd())         // НОВОЕ
+	rootCmd.AddCommand(newOnboardingCmd())     // НОВОЕ
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -727,4 +729,81 @@ func newHealthCmd() *cobra.Command {
 			return deployer.HealthCheck()
 		},
 	}
+}
+
+// newOnboardingCmd manages unified user onboarding (Keycloak-driven)
+func newOnboardingCmd() *cobra.Command {
+	var (
+		keycloakURL  string
+		realm        string
+		insecureTLS  bool
+		username     string
+		email        string
+		firstName    string
+		lastName     string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "onboarding",
+		Short: "User onboarding automation (Keycloak)",
+	}
+
+	createUserCmd := &cobra.Command{
+		Use:   "create-user",
+		Short: "Create a Keycloak user and email password setup link",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(username) == "" {
+				return fmt.Errorf("--username is required")
+			}
+			if strings.TrimSpace(email) == "" {
+				return fmt.Errorf("--email is required")
+			}
+
+			adminUser, adminPass := onboarding.DefaultKeycloakAdminCreds()
+			client := onboarding.NewKeycloakClient(keycloakURL, realm, adminUser, adminPass, insecureTLS)
+
+			existing, err := client.FindUserByUsername(username)
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				fmt.Printf("✅ User already exists: %s (%s)\n", existing.Username, existing.Email)
+				return nil
+			}
+
+			user := onboarding.KeycloakUser{
+				Username:        username,
+				Enabled:         true,
+				Email:           email,
+				EmailVerified:   false,
+				FirstName:       firstName,
+				LastName:        lastName,
+				RequiredActions: []string{"UPDATE_PASSWORD"},
+			}
+
+			userID, err := client.CreateUser(user)
+			if err != nil {
+				return err
+			}
+
+			actions := []string{"UPDATE_PASSWORD"}
+			if err := client.SendExecuteActionsEmail(userID, actions, "", 24*60*60); err != nil {
+				return fmt.Errorf("user created but email failed: %w", err)
+			}
+
+			fmt.Printf("✅ Created user %s and sent password setup email to %s\n", username, email)
+			return nil
+		},
+	}
+
+	createUserCmd.Flags().StringVar(&keycloakURL, "keycloak-url", "https://keycloak.ceres.local", "Keycloak base URL")
+	createUserCmd.Flags().StringVar(&realm, "realm", "ceres", "Keycloak realm")
+	createUserCmd.Flags().BoolVar(&insecureTLS, "insecure-tls", true, "Skip TLS verification (self-signed)")
+	createUserCmd.Flags().StringVar(&username, "username", "", "Username")
+	createUserCmd.Flags().StringVar(&email, "email", "", "Email")
+	createUserCmd.Flags().StringVar(&firstName, "first-name", "", "First name")
+	createUserCmd.Flags().StringVar(&lastName, "last-name", "", "Last name")
+
+	cmd.AddCommand(createUserCmd)
+	return cmd
 }
