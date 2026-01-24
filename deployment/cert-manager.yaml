@@ -17,6 +17,36 @@ metadata:
 spec:
   selfSigned: {}
 ---
+# Внутренняя CA ("по-взрослому" для локальной сети):
+# 1) выпускаем один корневой CA сертификат (ceres-root-ca)
+# 2) им подписываем все сертификаты для *.ceres.local (через ClusterIssuer ceres-ca)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ceres-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: CERES Root CA
+  secretName: ceres-root-ca
+  duration: 87600h # 10 years
+  renewBefore: 720h # 30 days
+  privateKey:
+    algorithm: RSA
+    size: 4096
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: ceres-ca
+spec:
+  ca:
+    secretName: ceres-root-ca
+---
 # ClusterIssuer для Let's Encrypt (для продакшена)
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer

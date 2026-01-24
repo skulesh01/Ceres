@@ -276,6 +276,7 @@ func (d *Deployer) update() error {
 	
 	// Re-apply all manifests (kubectl apply is idempotent)
 	manifests := []string{
+		"deployment/cert-manager.yaml",
 		"deployment/postgresql-fixed.yaml",
 		"deployment/redis.yaml",
 		"deployment/keycloak.yaml",

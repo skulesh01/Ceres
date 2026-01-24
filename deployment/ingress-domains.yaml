@@ -10,7 +10,7 @@ metadata:
   name: keycloak
   namespace: ceres
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -37,7 +37,7 @@ metadata:
   name: gitlab
   namespace: gitlab
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
     traefik.ingress.kubernetes.io/router.middlewares: "default-gitlab-headers@kubernetescrd"
 spec:
   ingressClassName: traefik
@@ -65,7 +65,7 @@ metadata:
   name: grafana
   namespace: monitoring
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -92,7 +92,7 @@ metadata:
   name: mattermost
   namespace: mattermost
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -119,7 +119,7 @@ metadata:
   name: nextcloud
   namespace: nextcloud
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -146,7 +146,7 @@ metadata:
   name: wikijs
   namespace: wiki
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -173,7 +173,7 @@ metadata:
   name: mailcow
   namespace: mailcow
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -200,7 +200,7 @@ metadata:
   name: portainer
   namespace: portainer
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
     traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
   ingressClassName: traefik
@@ -228,7 +228,7 @@ metadata:
   name: minio
   namespace: minio
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
@@ -255,7 +255,7 @@ metadata:
   name: adminer
   namespace: adminer
   annotations:
-    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    cert-manager.io/cluster-issuer: "ceres-ca"
 spec:
   ingressClassName: traefik
   tls:
