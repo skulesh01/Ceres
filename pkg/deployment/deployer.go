@@ -227,17 +227,17 @@ func (d *Deployer) freshInstall() error {
 		return fmt.Errorf("failed to create databases: %w", err)
 	}
 
-	fmt.Println("\n📦 Step 5: Networking (Ingress NGINX)")
-	if err := d.applyManifest("deployment/ingress-nginx.yaml"); err != nil {
-		return err
-	}
-	d.waitForPods("ingress-nginx", "app.kubernetes.io/component=controller", 120)
-
-	fmt.Println("\n📦 Step 6: Identity (Keycloak)")
-	if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {
+	fmt.Println("\n📦 Step 5: Identity (Keycloak)")
+	if err := d.applyManifest("deployment/keycloak.yaml"); err != nil {
 		return err
 	}
 	d.waitForPods("ceres", "app=keycloak", 180)
+
+	fmt.Println("\n📦 Step 6: Mail (SMTP/IMAP + Webmail)")
+	if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {
+		return err
+	}
+	d.waitForPods("mailcow", "app=mailcow", 180)
 
 	fmt.Println("\n📦 Step 7: All Services (Monitoring, Collaboration, Storage)")
 	if err := d.applyManifest("deployment/all-services.yaml"); err != nil {
@@ -249,8 +249,8 @@ func (d *Deployer) freshInstall() error {
 		return err
 	}
 
-	fmt.Println("\n📦 Step 10: Ingress Routes")
-	if err := d.applyManifest("deployment/ingress-routes.yaml"); err != nil {
+	fmt.Println("\n📦 Step 9: Ingress (Domains via Traefik)")
+	if err := d.applyManifest("deployment/ingress-domains.yaml"); err != nil {
 		return err
 	}
 
@@ -279,10 +279,10 @@ func (d *Deployer) update() error {
 		"deployment/postgresql-fixed.yaml",
 		"deployment/redis.yaml",
 		"deployment/keycloak.yaml",
-		"deployment/ingress-nginx.yaml",
+		"deployment/mailcow.yaml",
 		"deployment/all-services.yaml",
 		"deployment/nodeport-services.yaml",
-		"deployment/ingress-routes.yaml",
+		"deployment/ingress-domains.yaml",
 	}
 
 	for _, manifest := range manifests {
@@ -406,7 +406,7 @@ func (d *Deployer) showAccessInfo() {
 		fmt.Printf("  Redis:       %s:6379 (pass: ceres_redis_2025)\n", redisIP)
 	}
 	if keycloakIP != "" {
-		fmt.Printf("  Keycloak:    %s:8080 (admin / K3yClo@k!2025)\n", keycloakIP)
+		fmt.Printf("  Keycloak:    %s:8080 (admin / from secret ceres/keycloak-secret)\n", keycloakIP)
 	}
 	if grafanaIP != "" {
 		fmt.Printf("  Grafana:     %s:3000 (admin / Grafana@Admin2025)\n", grafanaIP)
