@@ -60,6 +60,9 @@ Thumbs.db
 .editorconfig
 *.iml
 
+# ☸️ kubectl config/cache (может появляться на сервере)
+.kube/
+
 # 📁 Резервные копии
 backups/
 backups/old/
