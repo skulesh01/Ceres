@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/skulesh01/ceres/pkg/backup"
 	"github.com/skulesh01/ceres/pkg/deployment"
-	"github.com/skulesh01/ceres/pkg/onboarding"
 	"github.com/skulesh01/ceres/pkg/mail"
+	"github.com/skulesh01/ceres/pkg/onboarding"
 	"github.com/skulesh01/ceres/pkg/sso"
 	"github.com/skulesh01/ceres/pkg/vpn"
 	"github.com/spf13/cobra"
