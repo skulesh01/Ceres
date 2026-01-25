@@ -1,0 +1,51 @@
+# CERES Console UI (Admin)
+# Runs as a host service on 192.168.1.3:8091 and is exposed via Traefik.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ceres-console-ui
+  namespace: ceres
+spec:
+  ports:
+    - name: http
+      port: 8091
+      targetPort: 8091
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: ceres-console-ui
+  namespace: ceres
+subsets:
+  - addresses:
+      - ip: 192.168.1.3
+    ports:
+      - name: http
+        port: 8091
+        protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ceres-console-ui
+  namespace: ceres
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - ui.ceres.local
+      secretName: ceres-console-ui-tls
+  rules:
+    - host: ui.ceres.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ceres-console-ui
+                port:
+                  number: 8091

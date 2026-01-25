@@ -26,6 +26,14 @@ echo "[CERES] running deploy (reconcile)..."
 # Make path resolution deterministic
 export CERES_ROOT="${REPO_DIR}"
 
+echo "[CERES] ensuring console/mail UI services..."
+if [ -f "./scripts/install-ui.sh" ]; then
+  # Ensure default layout matches systemd units
+  export REPO_DIR="${REPO_DIR}"
+  export CERES_ROOT="${REPO_DIR}"
+  bash ./scripts/install-ui.sh || echo "[CERES] UI install skipped/failed (non-fatal)"
+fi
+
 if [ -x "./bin/ceres" ]; then
   ./bin/ceres deploy --cloud proxmox --environment prod --namespace ceres
 else

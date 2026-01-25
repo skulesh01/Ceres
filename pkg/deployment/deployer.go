@@ -254,6 +254,16 @@ func (d *Deployer) freshInstall() error {
 		return err
 	}
 
+	fmt.Println("\n📦 Step 10: Mail UI (Onboarding sender)")
+	if err := d.applyManifest("deployment/ui/ceres-mail-ui.yaml"); err != nil {
+		return err
+	}
+
+	fmt.Println("\n📦 Step 11: CERES Console UI (Admin)")
+	if err := d.applyManifest("deployment/ui/ceres-console-ui.yaml"); err != nil {
+		return err
+	}
+
 	fmt.Println("\n📦 Step 8: Mark Installation Complete")
 	d.updateState("installed", "true")
 	d.updateState("version", CeresVersion)
@@ -284,6 +294,8 @@ func (d *Deployer) update() error {
 		"deployment/all-services.yaml",
 		"deployment/nodeport-services.yaml",
 		"deployment/ingress-domains.yaml",
+		"deployment/ui/ceres-mail-ui.yaml",
+		"deployment/ui/ceres-console-ui.yaml",
 	}
 
 	for _, manifest := range manifests {
