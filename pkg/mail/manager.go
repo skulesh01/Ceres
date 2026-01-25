@@ -2,9 +2,19 @@ package mail
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
+
+func isExternalMailMode() bool {
+	mode := strings.TrimSpace(strings.ToLower(os.Getenv("CERES_MAIL_MODE")))
+	if mode == "external" {
+		return true
+	}
+	skip := strings.TrimSpace(strings.ToLower(os.Getenv("CERES_SKIP_MAILCOW")))
+	return skip == "1" || skip == "true" || skip == "yes" || skip == "y" || skip == "on"
+}
 
 // Manager управляет почтовым сервером Mailcow
 type Manager struct {
@@ -20,6 +30,11 @@ func NewManager() *Manager {
 
 // Install устанавливает Mailcow
 func (m *Manager) Install() error {
+	if isExternalMailMode() {
+		fmt.Println("📧 External mail mode enabled; skipping Mailcow install")
+		m.showAccessInfo()
+		return nil
+	}
 	fmt.Println("📧 Устанавливаем Mailcow...")
 
 	// Apply manifest
@@ -75,6 +90,10 @@ func (m *Manager) ConfigureSMTP(service string) error {
 func (m *Manager) SendTestEmail(to string) error {
 	fmt.Printf("📬 Отправляем тестовое письмо на %s...\n", to)
 
+	if strings.TrimSpace(os.Getenv("CERES_SMTP_HOST")) != "" {
+		return m.SendEmail([]string{to}, "CERES Test Email", "This is a test email from CERES.", nil)
+	}
+
 	// Get postfix pod
 	cmd := exec.Command("kubectl", "get", "pods", "-n", m.namespace,
 		"-l", "app=mailcow",
@@ -105,6 +124,10 @@ func (m *Manager) SendTestEmail(to string) error {
 
 // Status показывает статус Mailcow
 func (m *Manager) Status() error {
+	if isExternalMailMode() {
+		m.showAccessInfo()
+		return nil
+	}
 	cmd := exec.Command("kubectl", "get", "pods,svc", "-n", m.namespace)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -120,9 +143,19 @@ func (m *Manager) showAccessInfo() {
 	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Println("📧 MAILCOW ACCESS INFO")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("🌐 Webmail: http://mail.ceres.local")
-	fmt.Println("📨 SMTP (internal): mailcow-smtp.mailcow.svc:587")
-	fmt.Println("📬 IMAP: mailcow-imap.mailcow.svc:993")
-	fmt.Println("🔐 Домен: @ceres.local")
+	if isExternalMailMode() {
+		fmt.Println("🌐 External mail: configured outside Kubernetes")
+		if h := strings.TrimSpace(os.Getenv("CERES_SMTP_HOST")); h != "" {
+			fmt.Printf("📨 SMTP: %s:%s\n", h, strings.TrimSpace(os.Getenv("CERES_SMTP_PORT")))
+		} else {
+			fmt.Println("📨 SMTP: (not set) set CERES_SMTP_HOST/CERES_SMTP_PORT/CERES_SMTP_USER/CERES_SMTP_PASS")
+		}
+		fmt.Println("🔐 IMAP/POP3/Webmail: depends on your external mail solution")
+	} else {
+		fmt.Println("🌐 Webmail: http://mail.ceres.local")
+		fmt.Println("📨 SMTP (internal): mailcow-smtp.mailcow.svc:587")
+		fmt.Println("📬 IMAP: mailcow-imap.mailcow.svc:993")
+		fmt.Println("🔐 Домен: @ceres.local")
+	}
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 }

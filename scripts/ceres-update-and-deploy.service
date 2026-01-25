@@ -9,6 +9,7 @@ Type=oneshot
 WorkingDirectory=/opt/ceres/Ceres
 Environment=REPO_URL=https://github.com/skulesh01/Ceres.git
 Environment=REPO_DIR=/opt/ceres/Ceres
+EnvironmentFile=-/etc/ceres/ceres.env
 ExecStart=/usr/bin/env bash /opt/ceres/Ceres/scripts/server-update-and-deploy.sh
 TimeoutStartSec=0
 

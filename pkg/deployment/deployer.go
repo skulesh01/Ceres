@@ -1,6 +1,7 @@
 package deployment
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,15 @@ import (
 	"strings"
 	"time"
 )
+
+func (d *Deployer) useExternalMail() bool {
+	mode := strings.TrimSpace(strings.ToLower(os.Getenv("CERES_MAIL_MODE")))
+	if mode == "external" {
+		return true
+	}
+	skip := strings.TrimSpace(strings.ToLower(os.Getenv("CERES_SKIP_MAILCOW")))
+	return skip == "1" || skip == "true" || skip == "yes" || skip == "y" || skip == "on"
+}
 
 const CeresVersion = "3.1.0"
 
@@ -234,10 +244,14 @@ func (d *Deployer) freshInstall() error {
 	d.waitForPods("ceres", "app=keycloak", 180)
 
 	fmt.Println("\n📦 Step 6: Mail (SMTP/IMAP + Webmail)")
-	if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {
-		return err
+	if d.useExternalMail() {
+		fmt.Println("  ↳ External mail mode enabled; skipping in-cluster Mailcow")
+	} else {
+		if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {
+			return err
+		}
+		d.waitForPods("mailcow", "app=mailcow", 180)
 	}
-	d.waitForPods("mailcow", "app=mailcow", 180)
 
 	fmt.Println("\n📦 Step 7: All Services (Monitoring, Collaboration, Storage)")
 	if err := d.applyManifest("deployment/all-services.yaml"); err != nil {
@@ -250,8 +264,14 @@ func (d *Deployer) freshInstall() error {
 	}
 
 	fmt.Println("\n📦 Step 9: Ingress (Domains via Traefik)")
-	if err := d.applyManifest("deployment/ingress-domains.yaml"); err != nil {
-		return err
+	if d.useExternalMail() {
+		if err := d.applyManifest("deployment/ingress-domains-no-mail.yaml"); err != nil {
+			return err
+		}
+	} else {
+		if err := d.applyManifest("deployment/ingress-domains.yaml"); err != nil {
+			return err
+		}
 	}
 
 	fmt.Println("\n📦 Step 10: Mail UI (Onboarding sender)")
@@ -297,6 +317,19 @@ func (d *Deployer) update() error {
 		"deployment/ui/ceres-mail-ui.yaml",
 		"deployment/ui/ceres-console-ui.yaml",
 	}
+	if d.useExternalMail() {
+		manifests = []string{
+			"deployment/cert-manager.yaml",
+			"deployment/postgresql-fixed.yaml",
+			"deployment/redis.yaml",
+			"deployment/keycloak.yaml",
+			"deployment/all-services.yaml",
+			"deployment/nodeport-services.yaml",
+			"deployment/ingress-domains-no-mail.yaml",
+			"deployment/ui/ceres-mail-ui.yaml",
+			"deployment/ui/ceres-console-ui.yaml",
+		}
+	}
 
 	for _, manifest := range manifests {
 		fmt.Printf("  📄 Applying %s\n", manifest)
@@ -329,7 +362,27 @@ func (d *Deployer) upgrade(oldVersion string) error {
 // applyManifest applies a Kubernetes manifest
 func (d *Deployer) applyManifest(path string) error {
 	resolved := d.resolveCeresPath(path)
-	cmd := exec.Command("kubectl", "apply", "-f", resolved)
+	// URL manifest: fall back to kubectl apply -f URL.
+	if strings.HasPrefix(resolved, "http://") || strings.HasPrefix(resolved, "https://") {
+		cmd := exec.Command("kubectl", "apply", "-f", resolved)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return err
+	}
+
+	// One-domain setup: replace the default domain everywhere in applied manifests.
+	// This is intentionally simple (string substitution) so we don't need to template every YAML.
+	if domain := strings.TrimSpace(os.Getenv("CERES_DOMAIN")); domain != "" && domain != "ceres.local" {
+		data = []byte(strings.ReplaceAll(string(data), "ceres.local", domain))
+	}
+
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = bytes.NewReader(data)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -790,6 +843,10 @@ func (d *Deployer) SetupLogging() error {
 
 // SetupMail устанавливает Mailcow
 func (d *Deployer) SetupMail() error {
+	if d.useExternalMail() {
+		fmt.Println("📧 External mail mode enabled; skipping Mailcow setup")
+		return nil
+	}
 	fmt.Println("📧 Установка Mailcow...")
 
 	if err := d.applyManifest("deployment/mailcow.yaml"); err != nil {

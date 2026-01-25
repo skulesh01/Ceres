@@ -4,8 +4,11 @@ set -euo pipefail
 REPO_DIR="${REPO_DIR:-/opt/ceres/Ceres}"
 CERES_ROOT="${CERES_ROOT:-$REPO_DIR}"
 
+DOMAIN="${CERES_DOMAIN:-ceres.local}"
+
 HOST_IP="${CERES_UI_HOST_IP:-192.168.1.3}"
-MAIL_FROM="${CERES_MAIL_FROM:-admin@ceres.local}"
+MAIL_FROM_DEFAULT="admin@${DOMAIN}"
+MAIL_FROM="${CERES_MAIL_FROM:-${MAIL_FROM_DEFAULT}}"
 VPN_ENDPOINT="${CERES_UI_VPN_ENDPOINT:-${CERES_VPN_ENDPOINT:-192.168.1.3}}"
 VPN_PORT="${CERES_UI_VPN_PORT:-51820}"
 
@@ -88,6 +91,7 @@ CERES_CONSOLE_LISTEN=:8091
 CERES_UI_BASIC_USER=${BASIC_USER}
 CERES_UI_BASIC_PASS=${BASIC_PASS}
 CERES_ROOT=${CERES_ROOT}
+CERES_DOMAIN=${DOMAIN}
 CERES_UI_CLOUD=${CERES_UI_CLOUD:-k3s}
 CERES_UI_ENV=${CERES_UI_ENV:-prod}
 CERES_UI_NAMESPACE=${CERES_UI_NAMESPACE:-ceres}
@@ -108,6 +112,7 @@ ${KUBECONFIG_PATH:+KUBECONFIG=${KUBECONFIG_PATH}}
 CERES_UI_LISTEN=:8090
 CERES_UI_BASIC_USER=${BASIC_USER}
 CERES_UI_BASIC_PASS=${BASIC_PASS}
+CERES_DOMAIN=${DOMAIN}
 CERES_UI_VPN_ENDPOINT=${VPN_ENDPOINT}
 CERES_UI_VPN_PORT=${VPN_PORT}
 CERES_MAIL_FROM=${MAIL_FROM}
@@ -135,8 +140,8 @@ systemctl restart ceres-console-ui.service || true
 systemctl restart ceres-mail-ui.service || true
 
 cat > /root/ceres-ui-credentials.txt <<EOF
-CERES Console UI: https://ui.ceres.local
-CERES Mail UI:    https://mail-ui.ceres.local
+CERES Console UI: https://ui.${DOMAIN}
+CERES Mail UI:    https://mail-ui.${DOMAIN}
 User: ${BASIC_USER}
 Pass: ${BASIC_PASS}
 

@@ -1,7 +1,9 @@
 platform:
   name: CERES
   version: 3.0.0
-  domain: ceres.local
+  # Base domain used by services (keep in sync with /etc/ceres/ceres.env -> CERES_DOMAIN)
+  # This file is a template: replace ${CERES_DOMAIN} with your real domain (e.g. company.com)
+  domain: "${CERES_DOMAIN}"
   environment: production
 
 cloud:
@@ -43,16 +45,16 @@ services:
     replicas: 2
     admin_user: admin
     admin_password: K3yClo@k!2025
-    domain: auth.ceres.local
+    domain: "auth.${CERES_DOMAIN}"
   
   # DevOps
   gitlab:
     enabled: false  # Large deployment, enable when needed
-    domain: gitlab.ceres.local
+    domain: "gitlab.${CERES_DOMAIN}"
   
   nextcloud:
     enabled: false
-    domain: cloud.ceres.local
+    domain: "cloud.${CERES_DOMAIN}"
   
   # Monitoring
   prometheus:
@@ -63,7 +65,7 @@ services:
     enabled: true
     admin_user: admin
     admin_password: Grafana@Admin2025
-    domain: grafana.ceres.local
+    domain: "grafana.${CERES_DOMAIN}"
   
   # Network
   ingress-nginx:

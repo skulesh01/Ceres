@@ -7,13 +7,16 @@ import (
 	"strings"
 
 	"github.com/skulesh01/ceres/pkg/backup"
+	"github.com/skulesh01/ceres/pkg/config"
 	"github.com/skulesh01/ceres/pkg/deployment"
 	"github.com/skulesh01/ceres/pkg/mail"
 	"github.com/skulesh01/ceres/pkg/onboarding"
 	"github.com/skulesh01/ceres/pkg/sso"
 	"github.com/skulesh01/ceres/pkg/tls"
+	"github.com/skulesh01/ceres/pkg/utils"
 	"github.com/skulesh01/ceres/pkg/vpn"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -143,6 +146,8 @@ Examples:
 
 // newConfigCmd creates the config command
 func newConfigCmd() *cobra.Command {
+	var configPath string
+
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage CERES configuration",
@@ -150,9 +155,12 @@ func newConfigCmd() *cobra.Command {
 
 Examples:
   ceres config show
-  ceres config set domain ceres.local
-  ceres config validate`,
+	  ceres config validate
+	  ceres config sync`,
 	}
+
+	cmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to CLI config.yaml (default: ~/.ceres/config.yaml)")
+	cmd.AddCommand(newConfigSyncCmd(&configPath))
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "show",
@@ -160,7 +168,21 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("📋 CERES Configuration")
 			fmt.Println("=====================================")
-			// TODO: Show config
+
+			path := strings.TrimSpace(configPath)
+			if path == "" {
+				path = utils.GetConfigPath()
+			}
+			cfg, err := config.LoadConfig(path)
+			if err != nil {
+				return fmt.Errorf("failed to load config %s: %w", path, err)
+			}
+			out, err := yaml.Marshal(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to render config as yaml: %w", err)
+			}
+			fmt.Printf("Path: %s\n\n", path)
+			fmt.Print(string(out))
 			return nil
 		},
 	})
@@ -169,10 +191,84 @@ Examples:
 		Use:   "validate",
 		Short: "Validate configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			path := strings.TrimSpace(configPath)
+			if path == "" {
+				path = utils.GetConfigPath()
+			}
+			cfg, err := config.LoadConfig(path)
+			if err != nil {
+				return fmt.Errorf("failed to load config %s: %w", path, err)
+			}
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("configuration invalid (%s): %w", path, err)
+			}
 			fmt.Println("✅ Configuration is valid")
 			return nil
 		},
 	})
+
+	return cmd
+}
+
+func newConfigSyncCmd(configPath *string) *cobra.Command {
+	var (
+		instanceEnvPath string
+		domainOverride  string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Sync CLI config from instance env",
+		Long: `Sync ~/.ceres/config.yaml from the instance-wide /etc/ceres/ceres.env.
+
+Currently it writes platform.domain from CERES_DOMAIN so CLI outputs and helpers stay consistent with the deployed domain.
+
+Examples:
+  ceres config sync
+  ceres config sync --instance-env /etc/ceres/ceres.env
+  ceres config sync --domain company.com`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := ""
+			if configPath != nil {
+				path = strings.TrimSpace(*configPath)
+			}
+			if path == "" {
+				path = utils.GetConfigPath()
+			}
+
+			domain := strings.TrimSpace(domainOverride)
+			if domain == "" {
+				vars, err := config.LoadInstanceEnv(instanceEnvPath)
+				if err != nil {
+					return fmt.Errorf("failed to load instance env: %w", err)
+				}
+				domain = strings.TrimSpace(vars["CERES_DOMAIN"])
+			}
+			if domain == "" {
+				return fmt.Errorf("CERES_DOMAIN is not set (use --domain or set it in %s)", instanceEnvPath)
+			}
+
+			cfg, err := config.LoadConfig(path)
+			if err != nil {
+				return fmt.Errorf("failed to load config %s: %w", path, err)
+			}
+
+			cfg.Platform.Domain = domain
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("resulting config invalid: %w", err)
+			}
+			if err := cfg.SaveConfig(path); err != nil {
+				return fmt.Errorf("failed to save config %s: %w", path, err)
+			}
+
+			fmt.Printf("✓ synced config: %s\n", path)
+			fmt.Printf("  domain: %s\n", domain)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&instanceEnvPath, "instance-env", "/etc/ceres/ceres.env", "Path to instance env file")
+	cmd.Flags().StringVar(&domainOverride, "domain", "", "Override domain instead of reading CERES_DOMAIN from instance env")
 
 	return cmd
 }

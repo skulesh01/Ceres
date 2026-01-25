@@ -1,7 +1,8 @@
 platform:
   name: CERES
   version: 3.0.0
-  domain: ceres.local
+  # Replace with your base domain (same value as /etc/ceres/ceres.env -> CERES_DOMAIN on the server)
+  domain: "${CERES_DOMAIN}"
   environment: production
 
 cloud:

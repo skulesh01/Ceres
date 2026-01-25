@@ -1,0 +1,317 @@
+# Ingress routes for internal CERES services (same as ingress-domains.yaml but without the Mailcow route).
+# Use this when mail/webmail is hosted on an external machine.
+#
+# NOTE: This file intentionally keeps *.ceres.local hosts for local access.
+# For a real public domain, use a separate ingress/public setup.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitlab
+  namespace: gitlab
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - gitlab.ceres.local
+    secretName: gitlab-tls
+  rules:
+  - host: gitlab.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gitlab
+            port:
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mattermost
+  namespace: mattermost
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - chat.ceres.local
+    secretName: mattermost-tls
+  rules:
+  - host: chat.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mattermost
+            port:
+              number: 8065
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redmine
+  namespace: redmine
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - projects.ceres.local
+    secretName: redmine-tls
+  rules:
+  - host: projects.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: redmine
+            port:
+              number: 3000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: ceres
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - keycloak.ceres.local
+    secretName: keycloak-tls
+  rules:
+  - host: keycloak.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: keycloak
+            port:
+              number: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - grafana.ceres.local
+    secretName: grafana-tls
+  rules:
+  - host: grafana.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  namespace: monitoring
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - prometheus.ceres.local
+    secretName: prometheus-tls
+  rules:
+  - host: prometheus.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - files.ceres.local
+    secretName: nextcloud-tls
+  rules:
+  - host: files.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nextcloud
+            port:
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wikijs
+  namespace: wiki
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - wiki.ceres.local
+    secretName: wikijs-tls
+  rules:
+  - host: wiki.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wikijs
+            port:
+              number: 3000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portainer
+  namespace: portainer
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - portainer.ceres.local
+    secretName: portainer-tls
+  rules:
+  - host: portainer.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portainer
+            port:
+              number: 9443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio
+  namespace: minio
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - minio.ceres.local
+    secretName: minio-tls
+  rules:
+  - host: minio.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              number: 9000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: adminer
+  namespace: adminer
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - db.ceres.local
+    secretName: adminer-tls
+  rules:
+  - host: db.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: adminer
+            port:
+              number: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vault
+  namespace: vault
+  annotations:
+    cert-manager.io/cluster-issuer: "ceres-ca"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - vault.ceres.local
+    secretName: vault-tls
+  rules:
+  - host: vault.ceres.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vault
+            port:
+              number: 8200

@@ -164,6 +164,14 @@ export CERES_MAIL_FROM=no-reply@yourdomain.com
 sudo -E bash ./scripts/install-ui.sh
 ```
 
+External mail (separate machine):
+
+```bash
+export CERES_MAIL_MODE=external
+```
+
+See `docs/MAIL_EXTERNAL.md`.
+
 ---
 
 ## 📊 Logs

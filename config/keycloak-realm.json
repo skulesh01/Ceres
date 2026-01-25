@@ -8,12 +8,6 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "sslRequired": "none",
-  "smtpServer": {
-    "host": "mailcow-smtp.mailcow.svc.cluster.local",
-    "port": "25",
-    "from": "no-reply@ceres.local",
-    "fromDisplayName": "CERES"
-  },
   "clients": [
     {
       "clientId": "gitlab",
