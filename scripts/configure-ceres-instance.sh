@@ -14,6 +14,14 @@ fi
 mkdir -p "$(dirname "${ENV_FILE}")"
 chmod 700 "$(dirname "${ENV_FILE}")"
 
+# Prefill variables from existing config, if any.
+if [ -f "${ENV_FILE}" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "${ENV_FILE}"
+  set +a
+fi
+
 prompt() {
   local var_name="$1"
   local text="$2"
