@@ -116,9 +116,67 @@ rm -f "${TMP_FILE}"
 
 echo "[CERES] Wrote: ${ENV_FILE}"
 
+# Best-effort checks (helpful on hosted mail setups)
+check_tcp() {
+  local host="$1"
+  local port="$2"
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 5 bash -c "cat < /dev/null > /dev/tcp/${host}/${port}" >/dev/null 2>&1
+    return $?
+  fi
+
+  # no timeout available; try quick connect anyway
+  (cat < /dev/null > /dev/tcp/${host}/${port}) >/dev/null 2>&1
+}
+
+echo "[CERES] Checking SMTP connectivity to ${CERES_SMTP_HOST}:${CERES_SMTP_PORT} (best-effort)..."
+if check_tcp "${CERES_SMTP_HOST}" "${CERES_SMTP_PORT}"; then
+  echo "[CERES] SMTP TCP connect OK"
+else
+  echo "[CERES] WARNING: cannot connect to ${CERES_SMTP_HOST}:${CERES_SMTP_PORT} from this server" >&2
+fi
+
+if command -v openssl >/dev/null 2>&1; then
+  echo "[CERES] Checking TLS certificate SAN for ${CERES_SMTP_HOST} (best-effort)..."
+  if [ "${CERES_SMTP_TLS}" = "true" ]; then
+    tls_out=$(echo | timeout 10 openssl s_client -connect "${CERES_SMTP_HOST}:${CERES_SMTP_PORT}" -servername "${CERES_SMTP_HOST}" 2>/dev/null \
+      | openssl x509 -noout -ext subjectAltName 2>/dev/null || true)
+  elif [ "${CERES_SMTP_STARTTLS}" = "true" ]; then
+    tls_out=$(echo | timeout 10 openssl s_client -starttls smtp -connect "${CERES_SMTP_HOST}:${CERES_SMTP_PORT}" -servername "${CERES_SMTP_HOST}" 2>/dev/null \
+      | openssl x509 -noout -ext subjectAltName 2>/dev/null || true)
+  else
+    tls_out=""
+  fi
+
+  if [ -n "${tls_out}" ] && echo "${tls_out}" | grep -qi "DNS:${CERES_SMTP_HOST}"; then
+    echo "[CERES] TLS SAN includes ${CERES_SMTP_HOST}"
+  elif [ -n "${tls_out}" ]; then
+    echo "[CERES] WARNING: TLS SAN may not include ${CERES_SMTP_HOST}; clients may fail TLS verification" >&2
+    echo "${tls_out}" | sed -n '1,3p' >&2 || true
+  fi
+fi
+
+# Export variables so subprocesses (Keycloak config, ceres mail test) can read them.
+export CERES_DOMAIN CERES_MAIL_MODE CERES_MAIL_FROM
+export CERES_SMTP_HOST CERES_SMTP_PORT CERES_SMTP_USER CERES_SMTP_PASS CERES_SMTP_STARTTLS CERES_SMTP_TLS
+
 # Configure Keycloak SMTP best-effort if we're inside the repo checkout
 if [ -f "./scripts/configure-keycloak-smtp.sh" ]; then
   bash ./scripts/configure-keycloak-smtp.sh || echo "[CERES] Keycloak SMTP config skipped/failed (non-fatal)" >&2
+fi
+
+# Optional: send a test email
+TEST_TO="${CERES_SMTP_TEST_TO:-}"
+if [ -z "${TEST_TO}" ]; then
+  read -r -p "Test email recipient (optional, press Enter to skip): " TEST_TO
+fi
+
+if [ -n "${TEST_TO}" ] && [ -x "./bin/ceres" ]; then
+  echo "[CERES] Sending test email to ${TEST_TO}..."
+  ./bin/ceres mail test "${TEST_TO}" || echo "[CERES] Test email failed" >&2
+elif [ -n "${TEST_TO}" ]; then
+  echo "[CERES] Skipping test email: ./bin/ceres not found/executable (run from repo root)" >&2
 fi
 
 echo "[CERES] done"

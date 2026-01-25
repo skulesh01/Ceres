@@ -172,6 +172,15 @@ export CERES_MAIL_MODE=external
 
 See `docs/MAIL_EXTERNAL.md`.
 
+Hosted mail (ISPmanager/reg.ru) quick path:
+
+```bash
+cd /root/Ceres
+sudo bash ./scripts/configure-ceres-smtp.sh
+```
+
+See `docs/MAIL_HOSTING_ISPMANAGER_RU.md`.
+
 ---
 
 ## 📊 Logs
