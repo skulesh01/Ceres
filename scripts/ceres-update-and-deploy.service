@@ -1,0 +1,16 @@
+[Unit]
+Description=CERES update from GitHub + reconcile
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Ensure script runs in the repo directory that matches UI services.
+WorkingDirectory=/opt/ceres/Ceres
+Environment=REPO_URL=https://github.com/skulesh01/Ceres.git
+Environment=REPO_DIR=/opt/ceres/Ceres
+ExecStart=/usr/bin/env bash /opt/ceres/Ceres/scripts/server-update-and-deploy.sh
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

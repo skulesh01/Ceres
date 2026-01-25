@@ -118,6 +118,24 @@ func (s *ConsoleServer) Run() error {
 		http.Redirect(w, r, "/jobs/"+j.ID, http.StatusSeeOther)
 	}))
 
+	mux.HandleFunc("/run/update-and-deploy", s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		confirm := strings.TrimSpace(r.FormValue("confirm"))
+		if confirm != "UPDATE" {
+			cfg, _ = s.loadConfig()
+			s.render(w, consoleHTML, map[string]any{"Cfg": cfg, "Jobs": s.Jobs.List(), "Flash": "Для обновления введите UPDATE в подтверждение"})
+			return
+		}
+
+		name := "update+deploy (systemd)"
+		cmd := []string{"bash", "-lc", "systemctl start ceres-update-and-deploy.service; sleep 1; journalctl -u ceres-update-and-deploy.service -n 200 --no-pager || true"}
+		j := s.Jobs.Start(name, cmd, s.workdir(), os.Environ())
+		http.Redirect(w, r, "/jobs/"+j.ID, http.StatusSeeOther)
+	}))
+
 	mux.HandleFunc("/run/status", s.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -372,9 +390,17 @@ func (s *ConsoleServer) Run() error {
 }
 
 func (s *ConsoleServer) startCeresJob(name string, args ...string) *Job {
-	cmd := []string{"go", "run", "./cmd/ceres"}
-	cmd = append(cmd, args...)
-	return s.Jobs.Start(name, cmd, s.workdir(), os.Environ())
+	// Prefer prebuilt binary when available; fall back to "go run" for dev.
+	wd := s.workdir()
+	if wd != "" {
+		binPath := filepath.Join(wd, "bin", "ceres")
+		if _, err := os.Stat(binPath); err == nil {
+			cmd := append([]string{binPath}, args...)
+			return s.Jobs.Start(name, cmd, wd, os.Environ())
+		}
+	}
+	cmd := append([]string{"go", "run", "./cmd/ceres"}, args...)
+	return s.Jobs.Start(name, cmd, wd, os.Environ())
 }
 
 func (s *ConsoleServer) workdir() string {
@@ -527,19 +553,23 @@ const consoleHTML = `<!doctype html><html><head><meta charset="utf-8"><meta name
       <div class="h1" style="font-size:16px">Деплой / Обновление</div>
       <div class="small">Cloud: <b>{{.Cfg.Cloud}}</b> • Env: <b>{{.Cfg.Environment}}</b> • Namespace: <b>{{.Cfg.Namespace}}</b></div>
       <div class="row" style="margin-top:12px">
-        <label>Подтверждение (введите DEPLOY)</label>
-        <input name="confirm" form="deployForm" placeholder="DEPLOY">
+				<label>Подтверждение (для deploy введите DEPLOY; для update+deploy введите UPDATE)</label>
+				<input name="confirm" form="deployForm" placeholder="DEPLOY / UPDATE">
       </div>
       <div class="actions">
         <form id="deployForm" method="post" action="/run/deploy">
           <input type="hidden" name="confirm" id="confirmHidden">
           <button class="btn" type="submit" onclick="document.getElementById('confirmHidden').value=document.querySelector('input[form=deployForm]').value;">Запустить deploy/reconcile</button>
         </form>
+				<form id="updateDeployForm" method="post" action="/run/update-and-deploy">
+					<input type="hidden" name="confirm" id="confirmHiddenUpdate">
+					<button class="btn secondary" type="submit" onclick="document.getElementById('confirmHiddenUpdate').value=document.querySelector('input[form=deployForm]').value;">Update from GitHub + deploy</button>
+				</form>
         <form method="post" action="/run/status">
           <button class="btn secondary" type="submit">Снять статус</button>
         </form>
       </div>
-      <div class="small" style="margin-top:10px">Кнопка запускает ` + "`go run ./cmd/ceres deploy`" + ` на сервере.</div>
+			<div class="small" style="margin-top:10px">Update+Deploy запускает systemd unit ` + "`ceres-update-and-deploy.service`" + ` (git pull + reconcile) и покажет свежие строки ` + "`journalctl`" + `.</div>
     </div>
 
     <div class="card">

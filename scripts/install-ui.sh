@@ -14,6 +14,13 @@ BASIC_PASS="${CERES_UI_BASIC_PASS:-}"
 
 mkdir -p "${REPO_DIR}"
 
+# Keep a stable path for systemd units and k8s Endpoints manifests.
+# If the repo lives elsewhere (e.g. /root/Ceres), make /opt/ceres/Ceres point to it.
+if [ "${REPO_DIR}" != "/opt/ceres/Ceres" ]; then
+  mkdir -p /opt/ceres
+  ln -sfn "${REPO_DIR}" /opt/ceres/Ceres
+fi
+
 if ! command -v go >/dev/null 2>&1; then
   if [ -x "/usr/local/go/bin/go" ]; then
     export PATH="$PATH:/usr/local/go/bin"
@@ -82,6 +89,9 @@ chmod 600 /etc/ceres/console-ui.env /etc/ceres/mail-ui.env
 
 install -m 0644 "${REPO_DIR}/scripts/ceres-console-ui.service" /etc/systemd/system/ceres-console-ui.service
 install -m 0644 "${REPO_DIR}/scripts/ceres-mail-ui.service" /etc/systemd/system/ceres-mail-ui.service
+if [ -f "${REPO_DIR}/scripts/ceres-update-and-deploy.service" ]; then
+  install -m 0644 "${REPO_DIR}/scripts/ceres-update-and-deploy.service" /etc/systemd/system/ceres-update-and-deploy.service
+fi
 
 systemctl daemon-reload
 systemctl enable --now ceres-console-ui.service
