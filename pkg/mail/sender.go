@@ -2,10 +2,14 @@ package mail
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"net/smtp"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +30,15 @@ func (m *Manager) SendEmail(to []string, subject, body string, attachments []Att
 		from = "admin@ceres.local"
 	}
 
+	// Preferred: send via real SMTP (supports internet mail server deployments).
+	if strings.TrimSpace(os.Getenv("CERES_SMTP_HOST")) != "" {
+		msg, err := buildMIMEMessage(from, to, subject, body, attachments)
+		if err != nil {
+			return err
+		}
+		return sendViaSMTP(from, to, msg)
+	}
+
 	podName, err := m.getMailcowPodName()
 	if err != nil {
 		return err
@@ -43,6 +56,101 @@ func (m *Manager) SendEmail(to []string, subject, body string, attachments []Att
 		return fmt.Errorf("sendmail failed: %w\nOutput: %s", err, string(out))
 	}
 	return nil
+}
+
+func sendViaSMTP(from string, to []string, msg string) error {
+	host := strings.TrimSpace(os.Getenv("CERES_SMTP_HOST"))
+	port := atoiDefault(os.Getenv("CERES_SMTP_PORT"), 587)
+	user := strings.TrimSpace(os.Getenv("CERES_SMTP_USER"))
+	pass := strings.TrimSpace(os.Getenv("CERES_SMTP_PASS"))
+	useStartTLS := parseBoolDefault(os.Getenv("CERES_SMTP_STARTTLS"), true)
+	useTLS := parseBoolDefault(os.Getenv("CERES_SMTP_TLS"), false) // for implicit TLS (e.g. 465)
+
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+
+	var conn net.Conn
+	var err error
+	if useTLS {
+		conn, err = tls.Dial("tcp", addr, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12})
+	} else {
+		conn, err = net.Dial("tcp", addr)
+	}
+	if err != nil {
+		return fmt.Errorf("smtp connect failed (%s): %w", addr, err)
+	}
+	defer conn.Close()
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp client init failed: %w", err)
+	}
+	defer c.Quit()
+
+	if !useTLS && useStartTLS {
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+				return fmt.Errorf("smtp starttls failed: %w", err)
+			}
+		}
+	}
+
+	if user != "" {
+		if ok, _ := c.Extension("AUTH"); ok {
+			auth := smtp.PlainAuth("", user, pass, host)
+			if err := c.Auth(auth); err != nil {
+				return fmt.Errorf("smtp auth failed: %w", err)
+			}
+		}
+	}
+
+	if err := c.Mail(from); err != nil {
+		return fmt.Errorf("smtp MAIL FROM failed: %w", err)
+	}
+	for _, rcpt := range to {
+		if err := c.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("smtp RCPT TO failed (%s): %w", rcpt, err)
+		}
+	}
+
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("smtp DATA failed: %w", err)
+	}
+	if _, err := w.Write([]byte(msg)); err != nil {
+		_ = w.Close()
+		return fmt.Errorf("smtp write failed: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("smtp close failed: %w", err)
+	}
+	return nil
+}
+
+func atoiDefault(s string, def int) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func parseBoolDefault(s string, def bool) bool {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return def
+	}
+	switch s {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return def
+	}
 }
 
 func (m *Manager) getMailcowPodName() (string, error) {

@@ -1,13 +1,4 @@
 apiVersion: v1
-kind: Secret
-metadata:
-  name: redis-secret
-  namespace: ceres-core
-type: Opaque
-stringData:
-  redis-password: ceres_redis_2025
----
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc

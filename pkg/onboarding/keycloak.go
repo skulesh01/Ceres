@@ -3,6 +3,7 @@ package onboarding
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -221,7 +223,28 @@ func (c *KeycloakClient) SendExecuteActionsEmail(userID string, actions []string
 	return c.doJSON(http.MethodPut, endpoint, actions, nil)
 }
 
-func DefaultKeycloakAdminCreds() (adminUser, adminPass string) {
+
+func getK8sSecretValue(namespace, name, key string) (string, error) {
+	// Reads a secret key value using kubectl.
+	// Expected to run from an admin host where kubectl is configured.
+	jsonPath := fmt.Sprintf("jsonpath={.data.%s}", key)
+	cmd := exec.Command("kubectl", "get", "secret", name, "-n", namespace, "-o", jsonPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("kubectl get secret %s/%s failed: %w\n%s", namespace, name, err, strings.TrimSpace(string(out)))
+	}
+	enc := strings.TrimSpace(string(out))
+	if enc == "" {
+		return "", fmt.Errorf("secret %s/%s key %s is empty", namespace, name, key)
+	}
+	b, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil {
+		return "", fmt.Errorf("failed to base64-decode secret %s/%s key %s: %w", namespace, name, key, err)
+	}
+	return string(b), nil
+}
+
+func DefaultKeycloakAdminCreds() (adminUser, adminPass string, err error) {
 	adminUser = strings.TrimSpace(os.Getenv("CERES_KEYCLOAK_ADMIN"))
 	if adminUser == "" {
 		adminUser = "admin"
@@ -231,7 +254,11 @@ func DefaultKeycloakAdminCreds() (adminUser, adminPass string) {
 		adminPass = strings.TrimSpace(os.Getenv("KEYCLOAK_ADMIN_PASSWORD"))
 	}
 	if adminPass == "" {
-		adminPass = "K3yClo@k!2025"
+		// Best-effort: read from k8s secret used by our manifests.
+		adminPass, err = getK8sSecretValue("ceres", "keycloak-secret", "admin-password")
+		if err != nil {
+			return adminUser, "", fmt.Errorf("keycloak admin password not provided; set CERES_KEYCLOAK_ADMIN_PASSWORD or ensure secret ceres/keycloak-secret exists: %w", err)
+		}
 	}
-	return adminUser, adminPass
+	return adminUser, adminPass, nil
 }

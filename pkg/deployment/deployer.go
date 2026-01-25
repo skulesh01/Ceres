@@ -413,10 +413,10 @@ func (d *Deployer) showAccessInfo() {
 	
 	fmt.Println("\n📊 Services:")
 	if pgIP != "" {
-		fmt.Printf("  PostgreSQL:  %s:5432 (user: postgres, pass: ceres_postgres_2025)\n", pgIP)
+		fmt.Printf("  PostgreSQL:  %s:5432 (user: postgres, pass: from secret ceres-core/postgresql-secret)\n", pgIP)
 	}
 	if redisIP != "" {
-		fmt.Printf("  Redis:       %s:6379 (pass: ceres_redis_2025)\n", redisIP)
+		fmt.Printf("  Redis:       %s:6379 (pass: from secret ceres-core/redis-secret)\n", redisIP)
 	}
 	if keycloakIP != "" {
 		fmt.Printf("  Keycloak:    %s:8080 (admin / from secret ceres/keycloak-secret)\n", keycloakIP)
@@ -827,7 +827,7 @@ func (d *Deployer) FixKeycloak() error {
 
 	fmt.Println("✅ Keycloak fixed and running")
 	fmt.Println("🌐 Admin: https://keycloak.ceres.local")
-	fmt.Println("👤 Credentials: admin / K3yClo@k!2025")
+	fmt.Println("👤 Credentials: admin / (from secret ceres/keycloak-secret:admin-password)")
 	return nil
 }
 

@@ -148,27 +148,5 @@
         "description": "Developer role"
       }
     ]
-  },
-  "users": [
-    {
-      "username": "admin",
-      "enabled": true,
-      "emailVerified": true,
-      "email": "admin@ceres.local",
-      "firstName": "Admin",
-      "lastName": "CERES",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Ceres@2025!",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "admin",
-        "user",
-        "developer"
-      ]
-    }
-  ]
+  }
 }

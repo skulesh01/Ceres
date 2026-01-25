@@ -142,6 +142,30 @@ kubectl apply -f deployment/
 
 ---
 
+## ✉️ Mail (SMTP)
+
+CERES Mail UI can send onboarding emails either:
+
+- via a real SMTP server (recommended for production)
+- or (fallback) by `kubectl exec ... sendmail` into the in-cluster postfix container
+
+SMTP settings (used when `CERES_SMTP_HOST` is set):
+
+```bash
+export CERES_SMTP_HOST=smtp.yourdomain.com
+export CERES_SMTP_PORT=587
+export CERES_SMTP_USER=no-reply@yourdomain.com
+export CERES_SMTP_PASS='***'
+export CERES_SMTP_STARTTLS=true   # default true
+export CERES_SMTP_TLS=false       # set true for implicit TLS (e.g. port 465)
+export CERES_MAIL_FROM=no-reply@yourdomain.com
+
+# Re-install UI env files + restart services
+sudo -E bash ./scripts/install-ui.sh
+```
+
+---
+
 ## 📊 Logs
 
 ```bash

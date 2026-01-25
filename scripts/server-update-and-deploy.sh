@@ -26,6 +26,14 @@ echo "[CERES] running deploy (reconcile)..."
 # Make path resolution deterministic
 export CERES_ROOT="${REPO_DIR}"
 
+echo "[CERES] bootstrapping Kubernetes secrets (if needed)..."
+if [ -f "./scripts/bootstrap-secrets.sh" ]; then
+  bash ./scripts/bootstrap-secrets.sh
+else
+  echo "[CERES] missing scripts/bootstrap-secrets.sh" >&2
+  exit 1
+fi
+
 echo "[CERES] ensuring console/mail UI services..."
 if [ -f "./scripts/install-ui.sh" ]; then
   # Ensure default layout matches systemd units

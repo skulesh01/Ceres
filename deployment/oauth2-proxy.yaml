@@ -8,17 +8,6 @@ metadata:
   name: oauth2-proxy
 ---
 apiVersion: v1
-kind: Secret
-metadata:
-  name: oauth2-proxy-secret
-  namespace: oauth2-proxy
-type: Opaque
-stringData:
-  client-id: oauth2-proxy
-  client-secret: oauth2-proxy-secret-2025
-  cookie-secret: aGVsbG93b3JsZHRoaXNpc2FzZWNyZXQ=  # base64 encoded 32-char string
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oauth2-proxy-config

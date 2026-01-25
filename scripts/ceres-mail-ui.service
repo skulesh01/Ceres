@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/ceres/Ceres
 EnvironmentFile=-/etc/ceres/mail-ui.env
+Environment=HOME=/root
 ExecStart=/opt/ceres/Ceres/bin/ceres-mail-ui
 Restart=always
 RestartSec=2

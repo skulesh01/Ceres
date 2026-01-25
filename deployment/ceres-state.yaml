@@ -40,11 +40,6 @@ data:
     minio: <auto>:9001
     vault: <auto>:8200
   credentials: |
-    postgres_password: ceres_postgres_2025
-    redis_password: ceres_redis_2025
-    keycloak_admin: admin:K3yClo@k!2025
-    grafana_admin: admin:Grafana@Admin2025
-    gitlab_root: root:GitLab@Root2025
-    nextcloud_admin: admin:Nextcloud@Admin2025
-    minio_root: minioadmin:MinIO@Admin2025
-    vault_token: root-token-2025
+    (redacted)
+    Do NOT store passwords or tokens in this ConfigMap.
+    Use Kubernetes Secrets (or Vault) and rotate credentials.

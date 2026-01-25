@@ -845,7 +845,10 @@ func newOnboardingCmd() *cobra.Command {
 				return fmt.Errorf("--email is required")
 			}
 
-			adminUser, adminPass := onboarding.DefaultKeycloakAdminCreds()
+			adminUser, adminPass, err := onboarding.DefaultKeycloakAdminCreds()
+			if err != nil {
+				return err
+			}
 			client := onboarding.NewKeycloakClient(keycloakURL, realm, adminUser, adminPass, insecureTLS)
 
 			existing, err := client.FindUserByUsername(username)
@@ -884,7 +887,7 @@ func newOnboardingCmd() *cobra.Command {
 
 	createUserCmd.Flags().StringVar(&keycloakURL, "keycloak-url", "https://keycloak.ceres.local", "Keycloak base URL")
 	createUserCmd.Flags().StringVar(&realm, "realm", "ceres", "Keycloak realm")
-	createUserCmd.Flags().BoolVar(&insecureTLS, "insecure-tls", true, "Skip TLS verification (self-signed)")
+	createUserCmd.Flags().BoolVar(&insecureTLS, "insecure-tls", false, "Skip TLS verification (self-signed)")
 	createUserCmd.Flags().StringVar(&username, "username", "", "Username")
 	createUserCmd.Flags().StringVar(&email, "email", "", "Email")
 	createUserCmd.Flags().StringVar(&firstName, "first-name", "", "First name")

@@ -1,0 +1,135 @@
+# OpenLDAP (Identity backend)
+# Goal: one password for EVERYTHING via LDAP (Keycloak federation + IMAP/SMTP auth)
+# NOTE: This is a minimal, internal-only deployment. For production, enable TLS/LDAPS and apply NetworkPolicies.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: identity
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openldap-secret
+  namespace: identity
+type: Opaque
+stringData:
+  admin-password: "CHANGE_ME_ADMIN_PASSWORD"
+  config-password: "CHANGE_ME_CONFIG_PASSWORD"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openldap-bootstrap-ldif
+  namespace: identity
+data:
+  01-base.ldif: |
+    dn: dc=ceres,dc=local
+    objectClass: top
+    objectClass: dcObject
+    objectClass: organization
+    o: CERES
+    dc: ceres
+
+    dn: ou=people,dc=ceres,dc=local
+    objectClass: top
+    objectClass: organizationalUnit
+    ou: people
+
+    dn: ou=groups,dc=ceres,dc=local
+    objectClass: top
+    objectClass: organizationalUnit
+    ou: groups
+
+    dn: ou=service-accounts,dc=ceres,dc=local
+    objectClass: top
+    objectClass: organizationalUnit
+    ou: service-accounts
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openldap-data
+  namespace: identity
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openldap
+  namespace: identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openldap
+  template:
+    metadata:
+      labels:
+        app: openldap
+    spec:
+      containers:
+        - name: openldap
+          image: bitnami/openldap:2.6.7
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LDAP_ROOT
+              value: "dc=ceres,dc=local"
+            - name: LDAP_ADMIN_USERNAME
+              value: "admin"
+            - name: LDAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openldap-secret
+                  key: admin-password
+            # Keep configs durable
+            - name: LDAP_CONFIG_ADMIN_ENABLED
+              value: "yes"
+            - name: LDAP_CONFIG_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openldap-secret
+                  key: config-password
+            # Internal-only for now. For production set yes and mount certs.
+            - name: LDAP_ENABLE_TLS
+              value: "no"
+          ports:
+            - name: ldap
+              containerPort: 1389
+            - name: ldaps
+              containerPort: 1636
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/openldap
+            - name: bootstrap
+              mountPath: /ldifs
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: openldap-data
+        - name: bootstrap
+          configMap:
+            name: openldap-bootstrap-ldif
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openldap
+  namespace: identity
+spec:
+  selector:
+    app: openldap
+  ports:
+    - name: ldap
+      port: 389
+      targetPort: 1389
+    - name: ldaps
+      port: 636
+      targetPort: 1636
+  type: ClusterIP
