@@ -479,38 +479,6 @@ func urlQueryEscape(s string) string {
 	return s
 }
 
-func splitCSV(v string) []string {
-	var out []string
-	for _, p := range strings.Split(v, ",") {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func envOr(k, def string) string {
-	v := strings.TrimSpace(os.Getenv(k))
-	if v == "" {
-		return def
-	}
-	return v
-}
-
-func atoiDefault(s string, def int) int {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return def
-	}
-	var n int
-	_, err := fmt.Sscanf(s, "%d", &n)
-	if err != nil || n <= 0 {
-		return def
-	}
-	return n
-}
-
 const consoleCSS = `
 :root{--bg:#0b1220;--card:#0f1a2e;--text:#e6eefc;--muted:#9fb2d1;--accent:#4aa3ff;--bad:#ff6b6b;--ok:#38d996;--border:#22304a;}
 *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; background:linear-gradient(180deg,#08101f,#0b1220); color:var(--text);} 
